@@ -1,0 +1,275 @@
+import { Schema } from "effect"
+import {
+  DailyMetric,
+  FeatureMetric,
+  SessionEvent,
+  SessionMetric,
+  SummaryMetrics,
+  ToolMetric,
+  UsageBreakdown
+} from "../shared/api"
+import { requireSession } from "./auth"
+import { HttpFailure, json, type WorkerEnv } from "./http"
+
+const AttributeValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean, Schema.Null])
+const Attributes = Schema.Record(Schema.String, AttributeValue)
+
+const decode = async <S extends Schema.ConstraintDecoder<unknown>>(
+  schema: S,
+  input: unknown
+): Promise<S["Type"]> => {
+  try {
+    return await Schema.decodeUnknownPromise(schema)(input)
+  } catch {
+    throw HttpFailure.make({ status: 500, code: "invalid_database_result", message: "Stored analytics data is invalid" })
+  }
+}
+
+const rows = async <S extends Schema.ConstraintDecoder<unknown>>(
+  env: WorkerEnv,
+  sql: string,
+  schema: S,
+  bindings: ReadonlyArray<string> = []
+): Promise<ReadonlyArray<S["Type"]>> => {
+  try {
+    const statement = env.DB.prepare(sql).bind(...bindings)
+    const result = await statement.all()
+    return await decode(Schema.Array(schema), result.results)
+  } catch (error) {
+    if (error instanceof HttpFailure) throw error
+    throw HttpFailure.make({ status: 500, code: "query_failed", message: "Analytics query failed" })
+  }
+}
+
+const rangeFromRequest = (request: Request): { from: string; to: string } => {
+  const url = new URL(request.url)
+  const now = new Date()
+  const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000)
+  const fromValue = url.searchParams.get("from") ?? defaultFrom.toISOString().slice(0, 10)
+  const toValue = url.searchParams.get("to") ?? now.toISOString().slice(0, 10)
+  const from = new Date(`${fromValue}T00:00:00.000Z`)
+  const inclusiveTo = new Date(`${toValue}T00:00:00.000Z`)
+
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(inclusiveTo.getTime()) || from > inclusiveTo) {
+    throw HttpFailure.make({ status: 400, code: "invalid_date_range", message: "Date range is invalid" })
+  }
+  if (inclusiveTo.getTime() - from.getTime() > 366 * 24 * 60 * 60 * 1000) {
+    throw HttpFailure.make({ status: 400, code: "date_range_too_large", message: "Date range cannot exceed 366 days" })
+  }
+
+  const toExclusive = new Date(inclusiveTo.getTime() + 24 * 60 * 60 * 1000)
+  return { from: from.toISOString(), to: toExclusive.toISOString() }
+}
+
+const SUMMARY_SQL = `
+  SELECT
+    COUNT(DISTINCT session_id) AS sessions,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
+    COALESCE(SUM(CASE WHEN event_type = 'agent_run' THEN duration_ms ELSE 0 END), 0) AS trackedMs,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN input_tokens ELSE 0 END), 0) AS inputTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN output_tokens ELSE 0 END), 0) AS outputTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_read_tokens ELSE 0 END), 0) AS cacheReadTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_write_tokens ELSE 0 END), 0) AS cacheWriteTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS totalTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost,
+    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' THEN 1 ELSE 0 END), 0) AS toolCalls,
+    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' AND status = 'error' THEN 1 ELSE 0 END), 0) AS toolErrors,
+    COALESCE(SUM(CASE WHEN event_type = 'compaction' THEN 1 ELSE 0 END), 0) AS compactions,
+    COALESCE(SUM(CASE WHEN event_type = 'goal' THEN 1 ELSE 0 END), 0) AS goals,
+    COALESCE(SUM(CASE WHEN event_type = 'subagent' THEN 1 ELSE 0 END), 0) AS subagents
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ?`
+
+const DAILY_SQL = `
+  SELECT
+    substr(occurred_at, 1, 10) AS date,
+    COUNT(DISTINCT session_id) AS sessions,
+    COALESCE(SUM(CASE WHEN event_type = 'agent_run' THEN duration_ms ELSE 0 END), 0) AS trackedMs,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS tokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ?
+  GROUP BY substr(occurred_at, 1, 10)
+  ORDER BY date`
+
+const breakdownSql = (keyExpression: string, labelExpression: string, filter = "event_type = 'usage'") => `
+  SELECT
+    ${keyExpression} AS key,
+    ${labelExpression} AS label,
+    COUNT(DISTINCT session_id) AS sessions,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS tokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ? AND ${filter}
+  GROUP BY ${keyExpression}, ${labelExpression}
+  ORDER BY cost DESC, tokens DESC`
+
+const TOOLS_SQL = `
+  SELECT
+    COALESCE(tool_name, 'unknown') AS name,
+    COUNT(*) AS calls,
+    COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) AS errors,
+    COALESCE(SUM(duration_ms), 0) AS durationMs
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'tool_execution'
+  GROUP BY tool_name
+  ORDER BY calls DESC, name
+  LIMIT 50`
+
+const FEATURES_SQL = `
+  SELECT 'compaction' AS feature,
+    COALESCE(json_extract(attributes_json, '$.reason'), 'unknown') AS label,
+    COUNT(*) AS count,
+    printf('%,d tokens before', COALESCE(ROUND(AVG(CAST(json_extract(attributes_json, '$.tokensBefore') AS REAL))), 0)) AS detail
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'compaction'
+  GROUP BY 2
+  UNION ALL
+  SELECT 'goal', COALESCE(status, 'observed'), COUNT(*), 'goal lifecycle events'
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'goal'
+  GROUP BY 2
+  UNION ALL
+  SELECT 'subagent', COALESCE(json_extract(attributes_json, '$.action'), 'observed'), COUNT(*), 'sub-agent lifecycle events'
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'subagent'
+  GROUP BY 2
+  ORDER BY feature, count DESC`
+
+const SESSIONS_SQL = `
+  SELECT
+    session_id AS id,
+    MIN(repository) AS repository,
+    MIN(occurred_at) AS startedAt,
+    MAX(occurred_at) AS endedAt,
+    COALESCE(MAX(CASE WHEN model IS NOT NULL THEN COALESCE(provider, '') || '/' || model END), 'unknown') AS model,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS tokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost,
+    COALESCE(SUM(CASE WHEN event_type = 'agent_run' THEN duration_ms ELSE 0 END), 0) AS trackedMs
+  FROM telemetry_events
+  WHERE occurred_at >= ? AND occurred_at < ?
+  GROUP BY session_id
+  ORDER BY endedAt DESC
+  LIMIT 50`
+
+export const dashboard = async (request: Request, env: WorkerEnv): Promise<Response> => {
+  await requireSession(request, env)
+  const range = rangeFromRequest(request)
+  const bindings = [range.from, range.to]
+  const featureBindings = [...bindings, ...bindings, ...bindings]
+
+  const [summaryRows, daily, models, thinking, repositories, tools, features, sessions] = await Promise.all([
+    rows(env, SUMMARY_SQL, SummaryMetrics, bindings),
+    rows(env, DAILY_SQL, DailyMetric, bindings),
+    rows(
+      env,
+      breakdownSql("COALESCE(provider, 'unknown') || '/' || COALESCE(model, 'unknown')", "COALESCE(provider, 'unknown') || '/' || COALESCE(model, 'unknown')"),
+      UsageBreakdown,
+      bindings
+    ),
+    rows(
+      env,
+      breakdownSql("COALESCE(thinking_level, 'unknown')", "COALESCE(thinking_level, 'unknown')"),
+      UsageBreakdown,
+      bindings
+    ),
+    rows(env, breakdownSql("repository", "repository", "1 = 1"), UsageBreakdown, bindings),
+    rows(env, TOOLS_SQL, ToolMetric, bindings),
+    rows(env, FEATURES_SQL, FeatureMetric, featureBindings),
+    rows(env, SESSIONS_SQL, SessionMetric, bindings)
+  ])
+
+  const summary = summaryRows[0] ?? SummaryMetrics.make({
+    sessions: 0,
+    turns: 0,
+    trackedMs: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    totalTokens: 0,
+    cost: 0,
+    toolCalls: 0,
+    toolErrors: 0,
+    compactions: 0,
+    goals: 0,
+    subagents: 0
+  })
+
+  return json({
+    from: range.from,
+    to: range.to,
+    summary,
+    daily,
+    models,
+    thinking,
+    repositories,
+    tools,
+    features,
+    sessions
+  })
+}
+
+const EventRow = Schema.Struct({
+  event_id: Schema.String,
+  occurred_at: Schema.String,
+  event_type: Schema.String,
+  repository: Schema.String,
+  provider: Schema.NullOr(Schema.String),
+  model: Schema.NullOr(Schema.String),
+  thinking_level: Schema.NullOr(Schema.String),
+  duration_ms: Schema.NullOr(Schema.Number),
+  total_tokens: Schema.NullOr(Schema.Number),
+  cost_total: Schema.NullOr(Schema.Number),
+  tool_name: Schema.NullOr(Schema.String),
+  status: Schema.NullOr(Schema.String),
+  attributes_json: Schema.String
+})
+
+export const sessionDetail = async (
+  request: Request,
+  env: WorkerEnv,
+  sessionId: string
+): Promise<Response> => {
+  await requireSession(request, env)
+  const eventRows = await rows(
+    env,
+    `SELECT event_id, occurred_at, event_type, repository, provider, model, thinking_level,
+      duration_ms, total_tokens, cost_total, tool_name, status, attributes_json
+     FROM telemetry_events WHERE session_id = ? ORDER BY occurred_at, sequence LIMIT 500`,
+    EventRow,
+    [sessionId]
+  )
+
+  if (eventRows.length === 0) {
+    throw HttpFailure.make({ status: 404, code: "session_not_found", message: "Session was not found" })
+  }
+
+  const events = await Promise.all(eventRows.map(async (event) => {
+    let attributes: typeof Attributes.Type
+    try {
+      attributes = await Schema.decodeUnknownPromise(Attributes)(JSON.parse(event.attributes_json))
+    } catch {
+      attributes = {}
+    }
+
+    return SessionEvent.make({
+      id: event.event_id,
+      occurredAt: event.occurred_at,
+      type: event.event_type,
+      ...(event.provider !== null ? { provider: event.provider } : {}),
+      ...(event.model !== null ? { model: event.model } : {}),
+      ...(event.thinking_level !== null ? { thinkingLevel: event.thinking_level } : {}),
+      ...(event.duration_ms !== null ? { durationMs: event.duration_ms } : {}),
+      ...(event.total_tokens !== null ? { tokens: event.total_tokens } : {}),
+      ...(event.cost_total !== null ? { cost: event.cost_total } : {}),
+      ...(event.tool_name !== null ? { toolName: event.tool_name } : {}),
+      ...(event.status !== null ? { status: event.status } : {}),
+      attributes
+    })
+  }))
+
+  return json({ sessionId, repository: eventRows[0].repository, events })
+}

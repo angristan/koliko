@@ -1,0 +1,2 @@
+BOOTSTRAP_TOKEN=replace-with-a-long-random-token
+SESSION_SECRET=replace-with-at-least-32-random-bytes

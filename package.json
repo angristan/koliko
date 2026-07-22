@@ -1,0 +1,61 @@
+{
+  "name": "traker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Privacy-first usage analytics for coding agents",
+  "license": "MIT",
+  "homepage": "https://traker.stanislas.cloud",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/angristan/traker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angristan/traker/issues"
+  },
+  "keywords": ["pi-package", "analytics", "cloudflare", "coding-agent"],
+  "scripts": {
+    "build": "vite build",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:worker": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cf:typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply traker --local",
+    "db:migrate:remote": "wrangler d1 migrations apply traker --remote",
+    "deploy": "bun run build && wrangler deploy"
+  },
+  "pi": {
+    "extensions": [
+      "./extension/index.ts"
+    ]
+  },
+  "dependencies": {
+    "@cloudflare/kumo": "2.8.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@simplewebauthn/browser": "13.3.0",
+    "@simplewebauthn/server": "13.3.0",
+    "effect": "4.0.0-beta.99",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@effect/vitest": "4.0.0-beta.99",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.0",
+    "wrangler": "4.112.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

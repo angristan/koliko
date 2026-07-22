@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "traker",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-07-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "traker.stanislas.cloud",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "traker",
+      "database_id": "377848c3-3125-4e3a-8ab1-faa06fbfa9c3",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "RP_NAME": "Traker",
+    "RP_ID": "traker.stanislas.cloud",
+    "EXPECTED_ORIGIN": "https://traker.stanislas.cloud"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
