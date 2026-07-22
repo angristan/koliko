@@ -1,5 +1,4 @@
 import { basename } from "node:path"
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { Schema } from "effect"
 import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../src/shared/protocol"
 import { configPath, loadConfig, saveBaseUrl, spoolPath, type LoadedConfig } from "./config"
@@ -19,6 +18,23 @@ const UsagePayload = Schema.Struct({
 type UsageShape = typeof UsagePayload.Type
 type ThinkingLevelValue = typeof ThinkingLevel.Type
 type EventType = typeof TelemetryEventType.Type
+
+interface ExtensionAPI {
+  readonly on: (event: string, handler: (event: any, context: any) => unknown) => void
+  readonly exec: (
+    command: string,
+    args: ReadonlyArray<string>,
+    options?: { readonly timeout?: number }
+  ) => Promise<{ readonly code: number; readonly stdout: string }>
+  readonly getThinkingLevel: () => ThinkingLevelValue
+  readonly registerCommand: (
+    name: string,
+    command: {
+      readonly description: string
+      readonly handler: (args: string, context: any) => unknown
+    }
+  ) => void
+}
 
 interface EventFields {
   readonly provider?: string
