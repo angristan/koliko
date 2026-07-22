@@ -10,6 +10,14 @@
     "run_worker_first": true,
     "not_found_handling": "single-page-application"
   },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "traker.example.com",
+      "custom_domain": true
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,8 +28,8 @@
   ],
   "vars": {
     "RP_NAME": "Traker",
-    "RP_ID": "localhost",
-    "EXPECTED_ORIGIN": "http://localhost:8787"
+    "RP_ID": "traker.example.com",
+    "EXPECTED_ORIGIN": "https://traker.example.com"
   },
   "observability": {
     "enabled": true

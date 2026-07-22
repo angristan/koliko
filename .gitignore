@@ -10,3 +10,4 @@ dist/
 !.dev.vars.example
 .DS_Store
 coverage/
+wrangler.production.jsonc

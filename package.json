@@ -5,7 +5,6 @@
   "type": "module",
   "description": "Privacy-first usage analytics for coding agents",
   "license": "MIT",
-  "homepage": "https://traker.stanislas.cloud",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/angristan/traker.git"
@@ -16,15 +15,19 @@
   "keywords": ["pi-package", "analytics", "cloudflare", "coding-agent"],
   "scripts": {
     "build": "vite build",
+    "verify": "bun run typecheck && bun run test && bun run build",
     "dev:web": "vite --host 127.0.0.1",
     "dev:worker": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "cf:typegen": "wrangler types",
+    "prepare:production-config": "bun scripts/prepare-production-config.ts",
+    "smoke:production": "bun scripts/smoke-production.ts",
     "db:migrate:local": "wrangler d1 migrations apply traker --local",
-    "db:migrate:remote": "wrangler d1 migrations apply traker --remote",
-    "deploy": "bun run build && wrangler deploy"
+    "db:migrate:remote": "bun run prepare:production-config && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc",
+    "deploy:dry-run": "bun run prepare:production-config && bun run build && wrangler deploy --dry-run --config wrangler.production.jsonc",
+    "deploy": "bun run prepare:production-config && bun run verify && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc && wrangler deploy --config wrangler.production.jsonc && bun run smoke:production"
   },
   "pi": {
     "extensions": [

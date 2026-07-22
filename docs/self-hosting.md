@@ -18,6 +18,7 @@ Choose the hostname before registering a passkey. WebAuthn credentials are bound
 git clone git@github.com:angristan/traker.git
 cd traker
 bun install
+cp wrangler.production.jsonc.example wrangler.production.jsonc
 bunx wrangler whoami
 ```
 
@@ -29,7 +30,7 @@ Review the account shown by Wrangler before creating resources.
 bunx wrangler d1 create traker
 ```
 
-Copy the returned database ID into the `DB` binding in `wrangler.jsonc`:
+Copy the returned database ID into the `DB` binding in the ignored `wrangler.production.jsonc` file:
 
 ```jsonc
 "d1_databases": [
@@ -42,7 +43,7 @@ Copy the returned database ID into the `DB` binding in `wrangler.jsonc`:
 ]
 ```
 
-The checked-in ID belongs to the maintainer's deployment. Forks must replace it.
+The tracked `wrangler.jsonc` remains configured for localhost. Real database IDs and deployment origins stay in the ignored production file.
 
 You can add `--location weur`, `--location enam`, or another supported location hint when creating the database.
 
@@ -82,8 +83,8 @@ Changing either value after passkey registration makes existing credentials unus
 Generate independent random values:
 
 ```bash
-openssl rand -base64 32 | bunx wrangler secret put BOOTSTRAP_TOKEN
-openssl rand -base64 48 | bunx wrangler secret put SESSION_SECRET
+openssl rand -base64 32 | bunx wrangler secret put BOOTSTRAP_TOKEN --config wrangler.production.jsonc
+openssl rand -base64 48 | bunx wrangler secret put SESSION_SECRET --config wrangler.production.jsonc
 ```
 
 - `BOOTSTRAP_TOKEN` authorizes registration only while the database contains no passkey.
@@ -94,13 +95,11 @@ Do not put either value in `wrangler.jsonc`, Git, shell history, or issue report
 ## 5. Migrate and deploy
 
 ```bash
-bun run build
-bunx wrangler deploy --dry-run
-bun run db:migrate:remote
+bun run deploy:dry-run
 bun run deploy
 ```
 
-The deployment uploads the Worker and Vite assets and applies the configured custom-domain trigger.
+The deployment validates types and tests, builds the dashboard, applies pending migrations, uploads the Worker and assets, and runs production smoke checks.
 
 ## 6. Register the first passkey
 
@@ -141,13 +140,13 @@ Confirm the HTML response includes:
 ### Migrations
 
 ```bash
-bunx wrangler d1 migrations list traker --remote
+bunx wrangler d1 migrations list traker --remote --config wrangler.production.jsonc
 ```
 
 ### Logs
 
 ```bash
-bunx wrangler tail traker
+bunx wrangler tail traker --config wrangler.production.jsonc
 ```
 
 The Worker logs unexpected failures. Traker does not intentionally log request bodies or ingestion keys.
@@ -157,22 +156,35 @@ The Worker logs unexpected failures. Traker does not intentionally log request b
 Use narrow queries and avoid exporting telemetry unless necessary:
 
 ```bash
-bunx wrangler d1 execute traker --remote \
+bunx wrangler d1 execute traker --remote --config wrangler.production.jsonc \
   --command "SELECT event_type, COUNT(*) AS count FROM telemetry_events GROUP BY event_type"
 ```
 
+## Automatic deployment without publishing instance details
+
+Keep `wrangler.production.jsonc` ignored. Workers Builds can reconstruct it from a secret build variable:
+
+1. Base64-encode the complete production config without printing it to logs.
+2. Create a secret build variable named `TRAKER_WRANGLER_CONFIG_B64` on the production trigger.
+3. Limit the trigger to `main`; do not create a preview trigger backed by the production D1 database.
+4. Leave the separate build command empty and use `bun run deploy` as the deploy command.
+5. Enable build caching and pin the desired Bun version with a non-secret `BUN_VERSION` build variable when needed.
+
+`scripts/prepare-production-config.ts` decodes the secret into a mode-`0600` file and rejects example values. The deployment command then runs checks, applies migrations, deploys, and verifies the live service.
+
+Cloudflare build variables exist only during the build. Runtime secrets such as `SESSION_SECRET` and `BOOTSTRAP_TOKEN` remain Worker secrets and are not placed in the build variable.
+
 ## Upgrades
+
+Manual upgrade:
 
 ```bash
 git pull --ff-only
 bun install
-bun run typecheck
-bun run test
-bun run build
-bunx wrangler d1 migrations list traker --remote
-bun run db:migrate:remote
 bun run deploy
 ```
+
+With Workers Builds enabled, a push to `main` runs the same deployment command automatically.
 
 Apply migrations before relying on code that expects the new schema. Never edit an already-applied migration; add a new numbered migration.
 
@@ -195,7 +207,7 @@ bun run cf:typegen
 ### Session-secret rotation
 
 ```bash
-openssl rand -base64 48 | bunx wrangler secret put SESSION_SECRET
+openssl rand -base64 48 | bunx wrangler secret put SESSION_SECRET --config wrangler.production.jsonc
 ```
 
 This immediately invalidates dashboard sessions and pending WebAuthn challenges. It does not delete passkeys or ingestion keys.
@@ -203,7 +215,7 @@ This immediately invalidates dashboard sessions and pending WebAuthn challenges.
 ### Bootstrap-token rotation
 
 ```bash
-openssl rand -base64 32 | bunx wrangler secret put BOOTSTRAP_TOKEN
+openssl rand -base64 32 | bunx wrangler secret put BOOTSTRAP_TOKEN --config wrangler.production.jsonc
 ```
 
 This does not affect existing passkeys or sessions. The token is ignored for passkey registration while at least one passkey exists.
@@ -215,7 +227,7 @@ Traker does not implement automatic telemetry retention. Define an operator poli
 Export D1 only when required because exports contain repository labels and usage metadata:
 
 ```bash
-bunx wrangler d1 export traker --remote --output=traker-backup.sql
+bunx wrangler d1 export traker --remote --config wrangler.production.jsonc --output=traker-backup.sql
 chmod 600 traker-backup.sql
 ```
 

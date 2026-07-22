@@ -118,12 +118,12 @@ The short path is:
 
 ```bash
 bun install
+cp wrangler.production.jsonc.example wrangler.production.jsonc
 bun run build
 bunx wrangler d1 create traker
-# Update the D1 binding and WebAuthn origin in wrangler.jsonc.
-bunx wrangler secret put BOOTSTRAP_TOKEN
-bunx wrangler secret put SESSION_SECRET
-bun run db:migrate:remote
+# Update the private production config with the D1 ID and final origin.
+bunx wrangler secret put BOOTSTRAP_TOKEN --config wrangler.production.jsonc
+bunx wrangler secret put SESSION_SECRET --config wrangler.production.jsonc
 bun run deploy
 ```
 
