@@ -304,10 +304,15 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
 
 function SessionDetails({ detail, onClose }: { readonly detail: SessionDetailResponse; readonly onClose: () => void }) {
   return (
-    <Panel title={detail.repository} detail={`${detail.events.length} events`} className="event-log-panel">
+    <Panel
+      title={detail.repository}
+      detail={detail.truncated ? `${detail.events.length} latest events` : `${detail.events.length} events`}
+      className="event-log-panel"
+    >
       <div className="event-log-actions">
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
       </div>
+      {detail.truncated && <div className="notice">Showing the latest 500 events.</div>}
       <div className="event-log">
         {detail.events.map((event) => (
           <div className="event-row" key={event.id}>

@@ -91,7 +91,8 @@ export class SessionEvent extends Schema.Class<SessionEvent>("SessionEvent")({
 export class SessionDetailResponse extends Schema.Class<SessionDetailResponse>("SessionDetailResponse")({
   sessionId: Schema.String,
   repository: Schema.String,
-  events: Schema.Array(SessionEvent)
+  events: Schema.Array(SessionEvent),
+  truncated: Schema.Boolean
 }) {}
 
 export class ApiKeySummary extends Schema.Class<ApiKeySummary>("ApiKeySummary")({
