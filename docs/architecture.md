@@ -49,11 +49,12 @@ Effect Schema decodes request bodies and database query results at the applicati
 
 ### D1
 
-D1 contains three tables:
+D1 contains four tables:
 
 | Table | Purpose |
 | --- | --- |
 | `passkeys` | WebAuthn public credentials, counters, transports, and usage timestamps |
+| `auth_challenges` | Consumed challenge IDs, purposes, attempt IDs, and expiry timestamps |
 | `api_keys` | Key names, visible prefixes, SHA-256 hashes, revocation state, and usage timestamps |
 | `telemetry_events` | Schema-versioned event metadata used by analytics queries |
 
@@ -67,7 +68,8 @@ The raw ingestion key and the WebAuthn private key are never stored in D1.
 2. The Worker creates a five-minute signed challenge cookie.
 3. The browser creates a resident WebAuthn credential with required user verification.
 4. The Worker verifies the response against `RP_ID` and `EXPECTED_ORIGIN`.
-5. The public credential is stored in D1 and the browser receives a seven-day, `HttpOnly`, `SameSite=Strict` session cookie.
+5. D1 atomically records the one-time challenge use and inserts the public credential. The bootstrap path inserts only when no passkey already exists.
+6. The browser receives a seven-day, `HttpOnly`, `SameSite=Strict` session cookie.
 
 Once at least one passkey exists, new passkeys require an authenticated dashboard session. The bootstrap token is no longer accepted for registration.
 
@@ -76,8 +78,8 @@ Once at least one passkey exists, new passkeys require an authenticated dashboar
 1. The Worker returns a five-minute authentication challenge and the registered credential list.
 2. The browser signs the challenge with a passkey.
 3. The Worker verifies origin, relying-party ID, signature, counter, and user verification.
-4. The credential counter and last-used timestamp are updated.
-5. The Worker issues a new seven-day session cookie.
+4. D1 atomically records the one-time challenge use and conditionally updates the credential's previous counter and last-used timestamp.
+5. Only a successful guarded write can issue a new seven-day session cookie.
 
 ### Telemetry ingestion
 

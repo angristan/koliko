@@ -93,7 +93,7 @@ Operators are responsible for:
 ## Secrets and credentials
 
 - Passkey private keys stay in the user's authenticator.
-- D1 stores WebAuthn public keys and signature counters.
+- D1 stores WebAuthn public keys, signature counters, and bounded metadata for consumed challenge IDs. Raw WebAuthn challenges are kept only in short-lived signed cookies.
 - Ingestion keys are shown once; D1 stores only their SHA-256 hashes and prefixes.
 - Dashboard sessions are signed with `SESSION_SECRET` and stored in `HttpOnly`, `SameSite=Strict` cookies.
 - The bootstrap token is used only while no passkey exists.

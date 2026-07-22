@@ -133,7 +133,7 @@ export class AuthenticationCredentialPayload extends Schema.Class<Authentication
 }) {}
 
 export class ApiKeyCreatePayload extends Schema.Class<ApiKeyCreatePayload>("ApiKeyCreatePayload")({
-  name: Schema.NonEmptyString
+  name: Schema.String.check(Schema.isTrimmed(), Schema.isLengthBetween(1, 80))
 }) {}
 
 export class DateRangeQuery extends Schema.Class<DateRangeQuery>("DateRangeQuery")({
