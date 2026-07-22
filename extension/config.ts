@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
+import { homedir } from "node:os"
 import { dirname, join } from "node:path"
-import { getAgentDir } from "@earendil-works/pi-coding-agent"
 import { Schema } from "effect"
 
 const TrackerConfig = Schema.Struct({
@@ -14,8 +14,16 @@ export interface LoadedConfig {
   readonly apiKey: string
 }
 
-export const configPath = join(getAgentDir(), "traker", "config.json")
-export const spoolPath = join(getAgentDir(), "traker", "spool.jsonl")
+const agentDir = (): string => {
+  const configured = process.env.PI_CODING_AGENT_DIR
+  if (!configured) return join(homedir(), ".pi", "agent")
+  if (configured === "~") return homedir()
+  if (configured.startsWith("~/")) return join(homedir(), configured.slice(2))
+  return configured
+}
+
+export const configPath = join(agentDir(), "traker", "config.json")
+export const spoolPath = join(agentDir(), "traker", "spool.jsonl")
 
 export const loadConfig = async (): Promise<LoadedConfig | undefined> => {
   const environmentBaseUrl = process.env.TRAKER_URL
