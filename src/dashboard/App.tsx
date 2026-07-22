@@ -589,7 +589,7 @@ export default function App() {
         </Sidebar.Content>
         <Sidebar.Footer className="app-sidebar-footer">
           <Sidebar.Menu>
-            <Sidebar.MenuButton icon={GithubLogoIcon} href="https://github.com/angristan" tooltip="GitHub">GitHub</Sidebar.MenuButton>
+            <Sidebar.MenuButton icon={GithubLogoIcon} href="https://github.com/angristan/traker" tooltip="GitHub">GitHub</Sidebar.MenuButton>
           </Sidebar.Menu>
           <Sidebar.Trigger />
         </Sidebar.Footer>
