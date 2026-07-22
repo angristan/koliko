@@ -10,6 +10,7 @@ import {
   AuthenticationCredentialPayload,
   RegistrationCredentialPayload
 } from "../shared/protocol"
+import { completeAuthentication, registerPasskey } from "./auth-storage"
 import { fromBase64Url, randomToken, safeSecretEqual, sha256, signValue, toBase64Url, verifySignedValue } from "./crypto"
 import {
   assertSameOrigin,
@@ -279,45 +280,23 @@ export const verifyRegistration = async (request: Request, env: WorkerEnv): Prom
   }
 
   const verifiedAt = Date.now()
-  const now = new Date(verifiedAt).toISOString()
   const credential = verification.registrationInfo.credential
-  const attemptId = crypto.randomUUID()
-  const writeResults = await env.DB.batch([
-    env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(verifiedAt),
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO auth_challenges
-        (id, purpose, attempt_id, expires_at, consumed_at)
-       VALUES (?, 'registration', ?, ?, ?)`
-    ).bind(challenge.id, attemptId, challenge.expiresAt, now),
-    env.DB.prepare(
-      `INSERT INTO passkeys
-        (credential_id, public_key, counter, transports, device_type, backed_up, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?
-       WHERE EXISTS (
-         SELECT 1 FROM auth_challenges
-         WHERE id = ? AND purpose = 'registration' AND attempt_id = ? AND expires_at > ?
-       )
-       AND (? = 1 OR NOT EXISTS (SELECT 1 FROM passkeys))`
-    ).bind(
-      credential.id,
-      toBase64Url(credential.publicKey),
-      credential.counter,
-      JSON.stringify(credential.transports ?? []),
-      verification.registrationInfo.credentialDeviceType,
-      verification.registrationInfo.credentialBackedUp ? 1 : 0,
-      now,
-      challenge.id,
-      attemptId,
-      verifiedAt,
-      registrationMode === "session" ? 1 : 0
-    )
-  ])
-  const consumed = writeResults[1]?.meta.changes ?? 0
-  const inserted = writeResults[2]?.meta.changes ?? 0
-  if (consumed !== 1 || inserted !== 1) {
-    if (inserted === 0) {
-      throw HttpFailure.make({ status: 409, code: "registration_conflict", message: "Passkey registration must be restarted" })
-    }
+  const writeResult = await registerPasskey(env, {
+    mode: registrationMode,
+    challengeId: challenge.id,
+    challengeExpiresAt: challenge.expiresAt,
+    verifiedAt,
+    credentialId: credential.id,
+    publicKey: toBase64Url(credential.publicKey),
+    counter: credential.counter,
+    transports: JSON.stringify(credential.transports ?? []),
+    deviceType: verification.registrationInfo.credentialDeviceType,
+    backedUp: verification.registrationInfo.credentialBackedUp
+  })
+  if (writeResult === "conflict") {
+    throw HttpFailure.make({ status: 409, code: "registration_conflict", message: "Passkey registration must be restarted" })
+  }
+  if (writeResult === "invariant") {
     throw HttpFailure.make({ status: 500, code: "registration_invariant", message: "Passkey registration could not be completed" })
   }
 
@@ -396,39 +375,18 @@ export const verifyAuthentication = async (request: Request, env: WorkerEnv): Pr
   }
 
   const verifiedAt = Date.now()
-  const now = new Date(verifiedAt).toISOString()
-  const newCounter = verification.authenticationInfo.newCounter
-  const attemptId = crypto.randomUUID()
-  const writeResults = await env.DB.batch([
-    env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(verifiedAt),
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO auth_challenges
-        (id, purpose, attempt_id, expires_at, consumed_at)
-       VALUES (?, 'authentication', ?, ?, ?)`
-    ).bind(challenge.id, attemptId, challenge.expiresAt, now),
-    env.DB.prepare(
-      `UPDATE passkeys SET counter = ?, last_used_at = ?
-       WHERE credential_id = ? AND counter = ?
-       AND EXISTS (
-         SELECT 1 FROM auth_challenges
-         WHERE id = ? AND purpose = 'authentication' AND attempt_id = ? AND expires_at > ?
-       )`
-    ).bind(
-      newCounter,
-      now,
-      passkey.credential_id,
-      passkey.counter,
-      challenge.id,
-      attemptId,
-      verifiedAt
-    )
-  ])
-  const consumed = writeResults[1]?.meta.changes ?? 0
-  const updated = writeResults[2]?.meta.changes ?? 0
-  if (consumed !== 1 || updated !== 1) {
-    if (updated === 0) {
-      throw HttpFailure.make({ status: 401, code: "stale_authentication", message: "Passkey authentication must be restarted" })
-    }
+  const writeResult = await completeAuthentication(env, {
+    challengeId: challenge.id,
+    challengeExpiresAt: challenge.expiresAt,
+    verifiedAt,
+    credentialId: passkey.credential_id,
+    previousCounter: passkey.counter,
+    nextCounter: verification.authenticationInfo.newCounter
+  })
+  if (writeResult === "stale") {
+    throw HttpFailure.make({ status: 401, code: "stale_authentication", message: "Passkey authentication must be restarted" })
+  }
+  if (writeResult === "invariant") {
     throw HttpFailure.make({ status: 500, code: "authentication_invariant", message: "Passkey authentication could not be completed" })
   }
 

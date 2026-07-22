@@ -54,7 +54,7 @@ const secureAssetResponse = (response: Response): Response => {
 }
 
 export default {
-  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+  async fetch(request: Request, env: WorkerEnv, _ctx: ExecutionContext): Promise<Response> {
     try {
       const url = new URL(request.url)
       if (url.pathname.startsWith("/api/")) return await routeApi(request, env)
