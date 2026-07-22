@@ -15,9 +15,9 @@
   "keywords": ["pi-package", "analytics", "cloudflare", "coding-agent"],
   "scripts": {
     "build": "vite build",
+    "build:production": "TRAKER_WRANGLER_CONFIG=wrangler.production.jsonc vite build",
     "verify": "bun run typecheck && bun run test && bun run build",
-    "dev:web": "vite --host 127.0.0.1",
-    "dev:worker": "wrangler dev",
+    "dev": "vite --host localhost --port 8787 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -27,8 +27,8 @@
     "smoke:production": "bun scripts/smoke-production.ts",
     "db:migrate:local": "wrangler d1 migrations apply traker --local",
     "db:migrate:remote": "bun run prepare:production-config && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc",
-    "deploy:dry-run": "bun run prepare:production-config && bun run build && wrangler deploy --dry-run --config wrangler.production.jsonc",
-    "deploy": "bun run prepare:production-config && bun run verify && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc && wrangler deploy --config wrangler.production.jsonc && bun run smoke:production"
+    "deploy:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run",
+    "deploy": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc && wrangler deploy && bun run smoke:production"
   },
   "pi": {
     "extensions": [
@@ -45,6 +45,7 @@
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "1.46.0",
     "@cloudflare/vitest-pool-workers": "0.18.7",
     "@earendil-works/pi-coding-agent": "0.81.1",
     "@effect/vitest": "4.0.0-beta.99",

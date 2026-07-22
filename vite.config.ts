@@ -1,8 +1,14 @@
+import { cloudflare } from "@cloudflare/vite-plugin"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
+const configPath = process.env.TRAKER_WRANGLER_CONFIG
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...cloudflare(configPath ? { configPath } : undefined)
+  ],
   build: {
     outDir: "dist",
     emptyOutDir: true,
@@ -15,11 +21,6 @@ export default defineConfig({
           return undefined
         }
       }
-    }
-  },
-  server: {
-    proxy: {
-      "/api": "http://127.0.0.1:8787"
     }
   }
 })

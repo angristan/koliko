@@ -135,21 +135,11 @@ Follow [Self-hosting](docs/self-hosting.md) before running these commands. It co
 bun install
 cp .dev.vars.example .dev.vars
 # Set independent BOOTSTRAP_TOKEN and SESSION_SECRET values.
-bun run build
 bun run db:migrate:local
-bun run dev:worker
+bun run dev
 ```
 
-Open `http://localhost:8787` and register a local passkey.
-
-For dashboard HMR, run the Worker and Vite in separate terminals:
-
-```bash
-bun run dev:worker
-bun run dev:web
-```
-
-Vite proxies `/api` to the Worker on port 8787. Exercise WebAuthn on the Worker origin because the relying-party ID and browser origin must match.
+Open the URL printed by Vite and register a local passkey. The Cloudflare Vite plugin runs the Worker, bindings, dashboard, and HMR together in Workerd. Exercise WebAuthn on that single origin because the relying-party ID and browser origin must match.
 
 ## Validation
 
