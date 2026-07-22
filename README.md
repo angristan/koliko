@@ -144,12 +144,10 @@ Open the URL printed by Vite and register a local passkey. The Cloudflare Vite p
 ## Validation
 
 ```bash
-bun run typecheck
-bun run test
-bun run build
-bun run cf:typegen
-bun run db:migrate:local
+bun run verify
 ```
+
+This checks generated Worker types, TypeScript, unit and Workerd integration tests, the Vite production build, and a Wrangler dry run. Workerd tests apply every D1 migration to isolated local storage.
 
 ## Documentation
 

@@ -194,6 +194,22 @@ Regenerate Worker types after changing bindings or environment variables:
 bun run cf:typegen
 ```
 
+## Rollback
+
+Record the deployed Git commit and migration state before an upgrade. Migrations run before the new Worker is uploaded, so migrations must remain backward-compatible with the currently deployed Worker.
+
+For a code-only regression, deploy the previous known-good commit with the same production configuration. Do not reverse or edit an applied migration merely to roll code back.
+
+For a schema or data regression:
+
+1. stop or limit writes if continuing traffic can worsen the problem;
+2. inspect the applied migrations and affected rows;
+3. prefer a new forward migration when data remains valid;
+4. use D1 Time Travel only after confirming the restore timestamp and acceptable data-loss window; and
+5. deploy code compatible with the restored schema before resuming normal traffic.
+
+A Time Travel restore replaces database state and can discard telemetry received after the selected point. Availability and retention depend on the account plan, so verify the current Cloudflare state before relying on it.
+
 ## Credential operations
 
 ### Ingestion key rotation

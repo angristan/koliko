@@ -2,6 +2,7 @@
   "name": "traker",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.3.9",
   "type": "module",
   "description": "Privacy-first usage analytics for coding agents",
   "license": "MIT",
@@ -16,7 +17,7 @@
   "scripts": {
     "build": "vite build",
     "build:production": "TRAKER_WRANGLER_CONFIG=wrangler.production.jsonc vite build",
-    "verify": "bun run typecheck && bun run test && bun run build",
+    "verify": "bun run cf:typecheck && bun run typecheck && bun run test && bun run build && wrangler deploy --dry-run",
     "dev": "vite --host localhost --port 8787 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
