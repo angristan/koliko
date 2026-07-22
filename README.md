@@ -2,8 +2,6 @@
 
 Privacy-first, WakaTime-style analytics for coding agents.
 
-**Dashboard:** [traker.stanislas.cloud](https://traker.stanislas.cloud)
-
 Traker records metadata about sessions, models, thinking levels, token usage, provider-reported cost, cache behavior, tools, context compaction, goals, and sub-agents. It does **not** collect conversation or code content. Pi is the first collector, with room for additional coding-agent integrations.
 
 ## Architecture
