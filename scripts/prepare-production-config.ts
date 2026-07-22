@@ -28,8 +28,18 @@ const validateConfig = (contents: string): void => {
 
   const config = record(parsed)
   const placement = record(config?.placement)
-  if (placement?.mode !== "off") {
-    throw new Error("Production Smart Placement must be off while the Worker serves static assets")
+  if (placement?.mode !== "smart") {
+    throw new Error("Production Smart Placement must be enabled for the API Worker")
+  }
+
+  const assets = record(config?.assets)
+  const workerFirst = assets?.run_worker_first
+  if (
+    !Array.isArray(workerFirst)
+    || workerFirst.length !== 1
+    || workerFirst[0] !== "/api/*"
+  ) {
+    throw new Error("Production assets must route only /api/* through the Worker")
   }
 
   const observability = record(config?.observability)

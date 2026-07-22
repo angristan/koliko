@@ -7,22 +7,21 @@ Traker separates dashboard authentication from telemetry ingestion. Coding-agent
 ```text
 +----------------------+       +-------------------------+
 | Pi collector         |       | Browser                 |
-|                      |       |                         |
 | lifecycle hooks      |       | React + Kumo dashboard |
 | 0600 JSONL spool     |       | WebAuthn passkey        |
-+----------+-----------+       +------------+------------+
-           |                                    |
-           | POST /api/v1/events                | /api/auth/*
-           | bearer ingestion key               | signed session cookie
-           +----------------+-------------------+
-                            |
-                  +---------v----------+
-                  | Cloudflare Worker  |
-                  |                    |
-                  | schema validation  |
++----------+-----------+       +-----------+-------------+
+           |                               |            |
+           | POST /api/v1/events           | /api/*     | static / SPA
+           | bearer ingestion key          |            |
+           +----------------+--------------+            |
+                            |                           |
+                  +---------v----------+      +---------v----------+
+                  | smart-placed       |      | Static Assets      |
+                  | API Worker         |      | nearest-edge cache |
+                  |                    |      | security headers   |
+                  | schema validation  |      +--------------------+
                   | auth boundaries    |
                   | analytics SQL      |
-                  | static assets      |
                   +---------+----------+
                             |
                          +--v--+
@@ -36,14 +35,15 @@ The Pi extension lives in `collectors/pi/`. It observes Pi lifecycle events and 
 
 The collector does not inspect session history or backfill old sessions.
 
-### Worker
+### Static Assets and API Worker
 
-The Worker owns four responsibilities:
+Workers Static Assets serves the Vite production build and SPA fallback from the nearest edge. Static security headers come from `public/_headers`; asset requests do not invoke user Worker code.
 
-1. Serve the Vite production build through Workers Static Assets.
-2. register and verify WebAuthn passkeys;
-3. authenticate and persist telemetry batches;
-4. query D1 for dashboard summaries and session details.
+Only `/api/*` requests enter the Worker, where Smart Placement can optimize D1 latency without moving static content away from visitors. The Worker owns three responsibilities:
+
+1. register and verify WebAuthn passkeys;
+2. authenticate and persist telemetry batches;
+3. query D1 for dashboard summaries and session details.
 
 Effect Schema decodes request bodies and database query results at the application boundary.
 

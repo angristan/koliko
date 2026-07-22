@@ -80,9 +80,11 @@ Changing either value after passkey registration makes existing credentials unus
 
 ### Placement and observability
 
-Keep `placement.mode` set to `off`. Traker serves static assets through the same Worker with `run_worker_first`, so Smart Placement would route browser assets away from users. A future split frontend/backend architecture can evaluate Smart Placement for the D1-backed API Worker independently.
+Keep `assets.run_worker_first` set to `["/api/*"]`. Static files and SPA routes then stay in the nearest-edge Workers Static Assets cache, while only API requests invoke user Worker code. Security headers are applied by `public/_headers` without requiring the Worker to run for assets.
 
-The production template explicitly persists Workers Logs and Traces at full sampling. Automatic platform spans cover requests and D1 calls; Traker adds one bounded custom span around passkey verification, telemetry ingestion, dashboard loading, and ingestion-key creation. Span attributes contain only a failure boolean and bounded failure category, and unexpected logs include only the error class.
+Keep `placement.mode` set to `smart` so Cloudflare can place the D1-backed API execution based on measured request duration. After deployment, allow time and traffic for analysis, then compare request-duration percentiles and inspect `placement_status`. Disable Smart Placement if it reports `UNSUPPORTED_APPLICATION` or measured API latency regresses.
+
+The production template explicitly persists Workers Logs and Traces at full sampling. Automatic platform spans cover API requests and D1 calls; Traker adds one bounded custom span around passkey verification, telemetry ingestion, dashboard loading, and ingestion-key creation. Span attributes contain only a failure boolean and bounded failure category, and unexpected logs include only the error class.
 
 Observability event volume scales approximately with requests plus captured spans and logs. Review Cloudflare usage before a high-traffic deployment. To stop trace ingestion quickly, set `observability.traces.enabled` to `false` and redeploy; choose a lower sampling rate only from measured traffic and retention requirements.
 

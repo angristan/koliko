@@ -55,25 +55,12 @@ const routeApi = async (
   return json({ error: { code: "not_found", message: "API route was not found" } }, { status: 404 })
 }
 
-const secureAssetResponse = (response: Response): Response => {
-  const secured = new Response(response.body, response)
-  secured.headers.set("x-content-type-options", "nosniff")
-  secured.headers.set("x-frame-options", "DENY")
-  secured.headers.set("referrer-policy", "no-referrer")
-  secured.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()")
-  secured.headers.set(
-    "content-security-policy",
-    "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
-  )
-  return secured
-}
-
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
     try {
       const url = new URL(request.url)
-      if (url.pathname.startsWith("/api/")) return await routeApi(request, env, ctx)
-      return secureAssetResponse(await env.ASSETS.fetch(request))
+      if (!url.pathname.startsWith("/api/")) return new Response("Not found", { status: 404 })
+      return await routeApi(request, env, ctx)
     } catch (error) {
       if (error instanceof HttpFailure) return errorResponse(error)
       console.error("Unhandled request failure", {

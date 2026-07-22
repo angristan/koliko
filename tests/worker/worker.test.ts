@@ -27,6 +27,13 @@ const sessionCookie = async (): Promise<string> => {
 }
 
 describe("Worker runtime", () => {
+  it("does not serve static content when invoked directly", async () => {
+    const response = await fetchWorker(new Request("https://example.test/"))
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).toBe("Not found")
+  })
+
   it("serves authentication status through Workerd", async () => {
     const response = await fetchWorker(new Request("https://example.test/api/auth/status"))
 
