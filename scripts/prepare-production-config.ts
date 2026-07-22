@@ -2,6 +2,15 @@ import { chmod, readFile, writeFile } from "node:fs/promises"
 
 const configPath = "wrangler.production.jsonc"
 
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
+  isRecord(value) ? value : undefined
+
+const validSamplingRate = (value: unknown): boolean =>
+  typeof value === "number" && value > 0 && value <= 1
+
 const validateConfig = (contents: string): void => {
   let parsed: unknown
   try {
@@ -15,6 +24,28 @@ const validateConfig = (contents: string): void => {
   }
   if (contents.includes("replace-with-your-d1-database-id") || contents.includes("traker.example.com")) {
     throw new Error("Production Wrangler config still contains example values")
+  }
+
+  const config = record(parsed)
+  const placement = record(config?.placement)
+  if (placement?.mode !== "off") {
+    throw new Error("Production Smart Placement must be off while the Worker serves static assets")
+  }
+
+  const observability = record(config?.observability)
+  const logs = record(observability?.logs)
+  const traces = record(observability?.traces)
+  if (
+    observability?.enabled !== true
+    || logs?.enabled !== true
+    || logs.invocation_logs !== true
+    || logs.persist !== true
+    || !validSamplingRate(logs.head_sampling_rate)
+    || traces?.enabled !== true
+    || traces.persist !== true
+    || !validSamplingRate(traces.head_sampling_rate)
+  ) {
+    throw new Error("Production observability must explicitly enable persisted logs and traces with a valid sampling rate")
   }
 }
 

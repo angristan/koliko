@@ -78,6 +78,14 @@ For `workers.dev`, enable it and use the exact deployed hostname for both WebAut
 
 Changing either value after passkey registration makes existing credentials unusable on the new origin.
 
+### Placement and observability
+
+Keep `placement.mode` set to `off`. Traker serves static assets through the same Worker with `run_worker_first`, so Smart Placement would route browser assets away from users. A future split frontend/backend architecture can evaluate Smart Placement for the D1-backed API Worker independently.
+
+The production template explicitly persists Workers Logs and Traces at full sampling. Automatic platform spans cover requests and D1 calls; Traker adds one bounded custom span around passkey verification, telemetry ingestion, dashboard loading, and ingestion-key creation. Span attributes contain only a failure boolean and bounded failure category, and unexpected logs include only the error class.
+
+Observability event volume scales approximately with requests plus captured spans and logs. Review Cloudflare usage before a high-traffic deployment. To stop trace ingestion quickly, set `observability.traces.enabled` to `false` and redeploy; choose a lower sampling rate only from measured traffic and retention requirements.
+
 ## 4. Create secrets
 
 Generate independent random values:
@@ -149,7 +157,7 @@ bunx wrangler d1 migrations list traker --remote --config wrangler.production.js
 bunx wrangler tail traker --config wrangler.production.jsonc
 ```
 
-The Worker logs unexpected failures. Traker does not intentionally log request bodies or ingestion keys.
+The Worker logs unexpected failures using bounded error classes. It does not intentionally log request bodies, ingestion keys, repository labels, session IDs, or raw errors. Workers Traces adds privacy-safe business spans for the main authenticated and ingestion operations.
 
 ### Database inspection
 
