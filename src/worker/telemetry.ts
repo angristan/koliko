@@ -72,16 +72,6 @@ const ingest = Effect.fn("Telemetry.ingest")(function*(apiKeyId: string, input: 
     Effect.mapError(() => InvalidTelemetry.make({ message: "Telemetry batch does not match schema version 1" }))
   )
 
-  if (batch.events.length === 0 || batch.events.length > 100) {
-    return yield* InvalidTelemetry.make({ message: "Telemetry batches must contain between 1 and 100 events" })
-  }
-
-  for (const event of batch.events) {
-    if (!Number.isFinite(Date.parse(event.occurredAt))) {
-      return yield* InvalidTelemetry.make({ message: "Telemetry event timestamps must be ISO-8601 values" })
-    }
-  }
-
   const repository = yield* TelemetryRepository
   yield* repository.insert(apiKeyId, batch.events)
   return batch.events.length

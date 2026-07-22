@@ -38,4 +38,37 @@ describe("telemetry protocol", () => {
 
     assert.isTrue(Exit.isFailure(exit))
   }))
+
+  it.effect("rejects invalid timestamps and negative metrics", () => Effect.gen(function*() {
+    for (const invalidEvent of [
+      { ...validEvent, occurredAt: "0" },
+      { ...validEvent, occurredAt: "2026-02-31T00:00:00.000Z" },
+      { ...validEvent, sequence: -1 },
+      { ...validEvent, totalTokens: -1 },
+      { ...validEvent, costTotal: Number.POSITIVE_INFINITY }
+    ]) {
+      const exit = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
+        clientName: "traker-pi-extension",
+        clientVersion: "0.1.0",
+        events: [invalidEvent]
+      }))
+      assert.isTrue(Exit.isFailure(exit))
+    }
+  }))
+
+  it.effect("requires a bounded non-empty batch", () => Effect.gen(function*() {
+    const empty = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
+      clientName: "traker-pi-extension",
+      clientVersion: "0.1.0",
+      events: []
+    }))
+    const oversized = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
+      clientName: "traker-pi-extension",
+      clientVersion: "0.1.0",
+      events: Array.from({ length: 101 }, (_, index) => ({ ...validEvent, id: `evt_${index}` }))
+    }))
+
+    assert.isTrue(Exit.isFailure(empty))
+    assert.isTrue(Exit.isFailure(oversized))
+  }))
 })

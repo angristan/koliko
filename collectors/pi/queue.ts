@@ -1,7 +1,7 @@
 import { appendFile, chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 import { Schema } from "effect"
-import { IngestBatch, TelemetryEvent } from "../../src/shared/protocol"
+import { IngestAccepted, IngestBatch, TelemetryEvent } from "../../src/shared/protocol"
 import type { LoadedConfig } from "./config"
 
 const CLIENT_VERSION = "0.1.0"
@@ -87,6 +87,10 @@ export class TelemetryQueue {
 
       if (!response.ok) {
         throw new Error(`Traker ingest returned HTTP ${response.status}`)
+      }
+      const acknowledgement = await Schema.decodeUnknownPromise(IngestAccepted)(await response.json())
+      if (acknowledgement.accepted !== batch.length) {
+        throw new Error(`Traker acknowledged ${acknowledgement.accepted} of ${batch.length} events`)
       }
 
       const deliveredIds = new Set(batch.map((event) => event.id))
