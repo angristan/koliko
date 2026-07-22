@@ -1,7 +1,7 @@
 import { appendFile, chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 import { Schema } from "effect"
-import { IngestBatch, TelemetryEvent } from "../src/shared/protocol"
+import { IngestBatch, TelemetryEvent } from "../../src/shared/protocol"
 import type { LoadedConfig } from "./config"
 
 const CLIENT_VERSION = "0.1.0"

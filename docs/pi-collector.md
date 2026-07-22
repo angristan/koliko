@@ -19,7 +19,7 @@ pi install /absolute/path/to/traker
 To load a checkout without installing it:
 
 ```bash
-pi -e /absolute/path/to/traker/extension/index.ts
+pi -e /absolute/path/to/traker/collectors/pi/index.ts
 ```
 
 After installation, run `/reload` in an existing Pi session or start a new session.

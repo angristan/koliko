@@ -1,6 +1,6 @@
 import { basename } from "node:path"
 import { Schema } from "effect"
-import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../src/shared/protocol"
+import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../../src/shared/protocol"
 import { configPath, loadConfig, saveBaseUrl, spoolPath, type LoadedConfig } from "./config"
 import { TelemetryQueue } from "./queue"
 
@@ -160,10 +160,7 @@ export default function trackerExtension(pi: ExtensionAPI) {
 
   pi.on("session_start", async (event, ctx) => {
     await configure()
-    if (!queue) {
-      ctx.ui.setStatus("traker", undefined)
-      return
-    }
+    if (!queue) return
 
     sessionId = ctx.sessionManager.getSessionId()
     runtimeId = crypto.randomUUID()
@@ -184,7 +181,6 @@ export default function trackerExtension(pi: ExtensionAPI) {
       attributes: { reason: event.reason, mode: ctx.mode }
     })
 
-    ctx.ui.setStatus("traker", "traker: on")
     if (timer) clearInterval(timer)
     timer = setInterval(() => {
       void queue?.flush().catch(() => undefined)
@@ -304,7 +300,7 @@ export default function trackerExtension(pi: ExtensionAPI) {
     }
   })
 
-  pi.on("session_shutdown", async (event, ctx) => {
+  pi.on("session_shutdown", async (event) => {
     if (timer) clearInterval(timer)
     timer = undefined
     if (!queue) return
@@ -316,7 +312,6 @@ export default function trackerExtension(pi: ExtensionAPI) {
       durationMs: Date.now() - runtimeStartedAt,
       attributes: { reason: event.reason }
     })
-    ctx.ui.setStatus("traker", undefined)
     await withTimeout(queue.flush().catch(() => undefined), 2_000)
   })
 

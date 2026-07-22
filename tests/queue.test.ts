@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { assert, describe, it, vi } from "@effect/vitest"
 import { Effect, Schema } from "effect"
 import { IngestBatch, TelemetryEvent } from "../src/shared/protocol"
-import { TelemetryQueue } from "../extension/queue"
+import { TelemetryQueue } from "../collectors/pi/queue"
 
 describe("telemetry queue", () => {
   it.effect("persists, sends, and removes acknowledged events", () => Effect.acquireUseRelease(

@@ -32,7 +32,7 @@ Traker separates dashboard authentication from telemetry ingestion. Coding-agent
 
 ### Pi collector
 
-The extension observes Pi lifecycle events and converts them to schema-versioned metadata events. Every event is appended to a local JSONL spool before delivery. The collector sends batches of up to 100 events and removes them from the spool only after a successful response.
+The Pi extension lives in `collectors/pi/`. It observes Pi lifecycle events and converts them to schema-versioned metadata events. Every event is appended to a local JSONL spool before delivery. The collector sends batches of up to 100 events and removes them from the spool only after a successful response.
 
 The collector does not inspect session history or backfill old sessions.
 
