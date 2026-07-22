@@ -1,9 +1,6 @@
 import { Schema } from "effect"
 
-export interface WorkerEnv extends Env {
-  readonly BOOTSTRAP_TOKEN: string
-  readonly SESSION_SECRET: string
-}
+export type WorkerEnv = Env
 
 export class HttpFailure extends Schema.TaggedErrorClass<HttpFailure>()("HttpFailure", {
   status: Schema.Number,
