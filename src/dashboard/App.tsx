@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   ActionIcon,
   Alert,
@@ -86,6 +86,8 @@ const rangeForDays = (days: number) => ({
   to: isoDate(new Date())
 })
 
+const MantineBarChart = lazy(() => import("@mantine/charts").then(({ BarChart }) => ({ default: BarChart })))
+
 const compactNumber = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })
 const integer = new Intl.NumberFormat("en")
 const money = new Intl.NumberFormat("en", {
@@ -93,6 +95,12 @@ const money = new Intl.NumberFormat("en", {
   currency: "USD",
   minimumFractionDigits: 2,
   maximumFractionDigits: 4
+})
+const summaryMoney = new Intl.NumberFormat("en", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
 })
 
 const formatDuration = (milliseconds: number): string => {
@@ -207,7 +215,7 @@ function Panel({
     <Paper withBorder radius="md" className={`panel ${className}`.trim()}>
       <Group justify="space-between" gap="sm" className="panel-header">
         <Text fw={700}>{title}</Text>
-        {detail && <Badge variant="light" color="gray" radius="sm" tt="none">{detail}</Badge>}
+        {detail && <Text size="xs" c="dimmed">{detail}</Text>}
       </Group>
       <Divider />
       <Box className="panel-body">{children}</Box>
@@ -216,76 +224,55 @@ function Panel({
 }
 
 function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) {
-  const width = 900
-  const height = 180
-  const margin = { top: 10, right: 14, bottom: 26, left: 50 }
-  const chartWidth = width - margin.left - margin.right
-  const chartHeight = height - margin.top - margin.bottom
+  const [tooltipY, setTooltipY] = useState<number>()
   const rawMax = Math.max(0, ...data.map((day) => day.tokens))
-  const magnitude = rawMax === 0 ? 1 : 10 ** Math.floor(Math.log10(rawMax))
-  const max = Math.max(1, Math.ceil(rawMax / magnitude) * magnitude)
-  const ticks = [0, 0.25, 0.5, 0.75, 1]
-  const points = data.map((day, index) => ({
-    day,
-    x: margin.left + (data.length === 1 ? chartWidth / 2 : index / (data.length - 1) * chartWidth),
-    y: margin.top + chartHeight - day.tokens / max * chartHeight
-  }))
-  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ")
-  const areaPath = points.length === 0
-    ? ""
-    : `M${points[0]!.x},${margin.top + chartHeight} L${points[0]!.x},${points[0]!.y} ${points.slice(1).map((point) => `L${point.x},${point.y}`).join(" ")} L${points.at(-1)!.x},${margin.top + chartHeight} Z`
-  const labelIndexes = new Set([0, ...[0.25, 0.5, 0.75, 1].map((fraction) => Math.round((data.length - 1) * fraction))])
   const total = data.reduce((sum, day) => sum + day.tokens, 0)
   const cost = data.reduce((sum, day) => sum + day.cost, 0)
-  const formatDay = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString("en", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC"
-  })
+  const chartData = data.map((day) => ({
+    date: new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC"
+    }),
+    tokens: day.tokens
+  }))
 
   return (
-    <Panel title="Token activity" detail={`${compactNumber.format(total)} tokens · ${money.format(cost)}`} className="chart-panel">
+    <Panel title="Daily tokens" detail={`Tokens ${compactNumber.format(total)} · Cost ${summaryMoney.format(cost)}`} className="chart-panel">
       {data.length === 0 || rawMax === 0 ? (
         <EmptyState icon={<ChartLineUpIcon />} title="No token activity" detail="Usage will appear here after your collector sends its first session." />
       ) : (
         <Box className="chart-wrap">
-          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily token usage line chart">
-            <defs>
-              <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--chart-color)" stopOpacity="0.28" />
-                <stop offset="100%" stopColor="var(--chart-color)" stopOpacity="0.01" />
-              </linearGradient>
-            </defs>
-            {ticks.map((fraction) => {
-              const y = margin.top + chartHeight - chartHeight * fraction
-              return (
-                <g key={fraction}>
-                  <line x1={margin.left} x2={width - margin.right} y1={y} y2={y} className="chart-grid" />
-                  <text x={margin.left - 12} y={y + 4} textAnchor="end" className="chart-label">
-                    {compactNumber.format(max * fraction)}
-                  </text>
-                </g>
-              )
-            })}
-            <path d={areaPath} fill="url(#chart-fill)" className="chart-area" />
-            <path d={linePath} pathLength={1} className="chart-line" />
-            {points.map(({ day, x, y }, index) => (
-              <g
-                key={day.date}
-                className={index === points.length - 1 ? "chart-point current" : "chart-point"}
-              >
-                <circle cx={x} cy={y} r="4" />
-                <circle cx={x} cy={y} r="13" className="chart-hit-area">
-                  <title>{day.date}: {integer.format(day.tokens)} tokens · {money.format(day.cost)}</title>
-                </circle>
-                {labelIndexes.has(index) && (
-                  <text x={x} y={height - 8} textAnchor={index === 0 ? "start" : index === data.length - 1 ? "end" : "middle"} className="chart-label">
-                    {formatDay(day.date)}
-                  </text>
-                )}
-              </g>
-            ))}
-          </svg>
+          <Suspense fallback={<Center h={190}><Loader size="sm" /></Center>}>
+            <MantineBarChart
+              h={190}
+              data={chartData}
+              dataKey="date"
+              series={[{ name: "tokens", label: "Tokens", color: "blue.5" }]}
+              maxBarWidth={18}
+              fillOpacity={0.9}
+              strokeDasharray="0"
+              tickLine="none"
+              valueFormatter={(value) => compactNumber.format(value)}
+              tooltipProps={{
+                offset: 20,
+                position: tooltipY === undefined
+                  ? undefined
+                  : { y: Math.min(Math.max(tooltipY - 28, 10), 126) }
+              }}
+              barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
+              barChartProps={{ margin: { top: 6, right: 4, bottom: 4, left: 0 } }}
+              xAxisProps={{ minTickGap: 32, tickMargin: 12 }}
+              yAxisProps={{ width: 44, tickFormatter: (value: number) => compactNumber.format(value) }}
+              className="activity-chart"
+              aria-label="Daily token usage bar chart"
+              onPointerMove={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect()
+                setTooltipY(event.clientY - bounds.top)
+              }}
+              onPointerLeave={() => setTooltipY(undefined)}
+            />
+          </Suspense>
         </Box>
       )}
     </Panel>

@@ -1,7 +1,3 @@
-:root {
-  --chart-color: var(--mantine-color-indigo-6);
-}
-
 * {
   box-sizing: border-box;
 }
@@ -271,64 +267,42 @@ a {
   border-bottom: 0;
 }
 
+.chart-panel .panel-header {
+  min-height: 44px;
+  padding-inline: 16px;
+}
+
 .chart-wrap {
-  padding: 8px 12px 6px;
+  padding: 12px 16px 14px;
 }
 
-.chart-wrap svg {
-  width: 100%;
-  max-height: 280px;
-  display: block;
-  overflow: visible;
+.activity-chart {
+  --chart-grid-color: light-dark(#e7e7e5, #292a2e);
+  --chart-cursor-fill: light-dark(rgba(0, 0, 0, 0.055), rgba(255, 255, 255, 0.055));
+  --chart-text-color: var(--mantine-color-dimmed);
 }
 
-.chart-grid {
-  stroke: light-dark(#eceef4, #2b2d33);
-  stroke-width: 1;
-  stroke-dasharray: 4 5;
-  vector-effect: non-scaling-stroke;
+.activity-chart .mantine-BarChart-axis {
+  font-size: 10px;
 }
 
-.chart-label {
-  fill: var(--mantine-color-dimmed);
-  font: 10px Inter, ui-sans-serif, sans-serif;
+.activity-chart .mantine-ChartTooltip-tooltip {
+  min-width: 164px;
 }
 
-.chart-line {
-  fill: none;
-  stroke: var(--chart-color);
-  stroke-width: 2.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
+.activity-chart .mantine-ChartTooltip-tooltipLabel {
+  padding: 8px 12px 5px;
+  font-size: 13px;
+  line-height: 1.25;
 }
 
-.chart-point > circle:first-child {
-  fill: light-dark(#fff, #1b1c20);
-  stroke: var(--chart-color);
-  stroke-width: 2.25;
-  vector-effect: non-scaling-stroke;
-  transition: r 120ms ease, fill 120ms ease;
+.activity-chart .mantine-ChartTooltip-tooltipBody {
+  padding: 0 12px 9px;
 }
 
-.chart-point.current > circle:first-child {
-  fill: var(--mantine-color-orange-5);
-  stroke: light-dark(#fff, #1b1c20);
-  stroke-width: 3;
-}
-
-.chart-hit-area {
-  fill: transparent;
-  cursor: crosshair;
-}
-
-.chart-point:hover > circle:first-child {
-  r: 5.5;
-  fill: var(--chart-color);
-}
-
-.chart-point.current:hover > circle:first-child {
-  fill: var(--mantine-color-orange-5);
+.activity-chart .mantine-ChartTooltip-tooltipItem {
+  font-size: 13px;
+  line-height: 1.25;
 }
 
 .empty-state {
@@ -673,13 +647,11 @@ a {
     padding-inline: 12px;
   }
 
+  .chart-panel .panel-header,
   .chart-wrap {
-    padding-inline: 10px;
+    padding-inline: 12px;
   }
 
-  .chart-label {
-    font-size: 12px;
-  }
 
   .key-create {
     align-items: stretch;
@@ -710,7 +682,6 @@ a {
   .metric-icon,
   .nav-item,
   .nav-item .mantine-NavLink-section,
-  .chart-point > circle:first-child,
   .mantine-Button-root,
   .mantine-ActionIcon-root {
     transition: none;
