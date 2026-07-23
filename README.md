@@ -136,10 +136,11 @@ bun install
 cp .dev.vars.example .dev.vars
 # Set independent BOOTSTRAP_TOKEN and SESSION_SECRET values.
 bun run db:migrate:local
+bun run db:seed:local # Optional: add realistic demo analytics.
 bun run dev
 ```
 
-Open the URL printed by Vite and register a local passkey. The Cloudflare Vite plugin runs the Worker, bindings, dashboard, and HMR together in Workerd. Exercise WebAuthn on that single origin because the relying-party ID and browser origin must match.
+The seed command adds 90 days of deterministic demo activity and replaces only its own data when rerun. Open the URL printed by Vite and register a local passkey. The Cloudflare Vite plugin runs the Worker, bindings, dashboard, and HMR together in Workerd. Exercise WebAuthn on that single origin because the relying-party ID and browser origin must match.
 
 ## Validation
 

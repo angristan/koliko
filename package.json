@@ -27,6 +27,7 @@
     "prepare:production-config": "bun scripts/prepare-production-config.ts",
     "smoke:production": "bun scripts/smoke-production.ts",
     "db:migrate:local": "wrangler d1 migrations apply koliko --local",
+    "db:seed:local": "bun scripts/seed-local.ts",
     "db:migrate:remote": "bun run prepare:production-config && wrangler d1 migrations apply koliko --remote --config wrangler.production.jsonc",
     "deploy:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run",
     "deploy": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply koliko --remote --config wrangler.production.jsonc && wrangler deploy && bun run smoke:production"
