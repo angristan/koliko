@@ -15,9 +15,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (
+            id.includes("node_modules/recharts")
+            || id.includes("node_modules/d3-")
+            || id.includes("node_modules/@victory-vendor")
+            || id.includes("node_modules/react-smooth")
+          ) return "chart-engine"
           if (id.includes("node_modules/@cloudflare/kumo") || id.includes("node_modules/@base-ui") || id.includes("node_modules/@phosphor-icons")) return "ui"
           if (id.includes("node_modules/effect")) return "effect"
-          if (id.includes("node_modules/react") || id.includes("node_modules/scheduler")) return "react"
+          if (
+            id.includes("node_modules/react/")
+            || id.includes("node_modules/react-dom/")
+            || id.includes("node_modules/scheduler/")
+          ) return "react"
           return undefined
         }
       }

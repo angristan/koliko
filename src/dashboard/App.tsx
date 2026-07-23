@@ -64,8 +64,7 @@ import {
 import type {
   ApiKeySummary,
   DashboardResponse,
-  SessionDetailResponse,
-  UsageBreakdown
+  SessionDetailResponse
 } from "../shared/api"
 import {
   createApiKey,
@@ -79,7 +78,7 @@ import {
   revokeApiKey
 } from "./api"
 
-type Tab = "overview" | "features" | "sessions" | "settings"
+type Tab = "overview" | "analytics" | "sessions" | "settings"
 
 const isoDate = (date: Date): string => date.toISOString().slice(0, 10)
 const rangeForDays = (days: number) => ({
@@ -87,7 +86,8 @@ const rangeForDays = (days: number) => ({
   to: isoDate(new Date())
 })
 
-const MantineBarChart = lazy(() => import("@mantine/charts").then(({ BarChart }) => ({ default: BarChart })))
+const OverviewCharts = lazy(() => import("./AnalyticsCharts").then(({ OverviewCharts }) => ({ default: OverviewCharts })))
+const AnalyticsWorkspace = lazy(() => import("./AnalyticsCharts").then(({ AnalyticsWorkspace }) => ({ default: AnalyticsWorkspace })))
 
 const compactNumber = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })
 const integer = new Intl.NumberFormat("en")
@@ -97,13 +97,6 @@ const money = new Intl.NumberFormat("en", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 4
 })
-const summaryMoney = new Intl.NumberFormat("en", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-})
-
 const formatDuration = (milliseconds: number): string => {
   const totalMinutes = Math.round(milliseconds / 60_000)
   if (totalMinutes < 60) return `${totalMinutes}m`
@@ -116,7 +109,7 @@ const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`
 
 const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly description: string }>> = {
   overview: { title: "Overview", description: "See where your agent time, tokens, and spend are going." },
-  features: { title: "Agent features", description: "Understand tools, reasoning, compaction, goals, and delegation." },
+  analytics: { title: "Analytics", description: "Explore usage, cost, tools, sessions, and agent feature trends." },
   sessions: { title: "Sessions", description: "Inspect recent runs and their privacy-safe event metadata." },
   settings: { title: "Settings", description: "Manage collector access, passkeys, and your data boundary." }
 }
@@ -225,62 +218,6 @@ function Panel({
   )
 }
 
-function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) {
-  const [tooltipY, setTooltipY] = useState<number>()
-  const rawMax = Math.max(0, ...data.map((day) => day.tokens))
-  const total = data.reduce((sum, day) => sum + day.tokens, 0)
-  const cost = data.reduce((sum, day) => sum + day.cost, 0)
-  const chartData = data.map((day) => ({
-    date: new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en", {
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC"
-    }),
-    tokens: day.tokens
-  }))
-
-  return (
-    <Panel title="Daily tokens" detail={`Tokens ${compactNumber.format(total)} · Cost ${summaryMoney.format(cost)}`} className="chart-panel">
-      {data.length === 0 || rawMax === 0 ? (
-        <EmptyState icon={<ChartLineUpIcon />} title="No token activity" detail="Usage will appear here after your collector sends its first session." />
-      ) : (
-        <Box className="chart-wrap">
-          <Suspense fallback={<Center h={190}><Loader size="sm" /></Center>}>
-            <MantineBarChart
-              h={190}
-              data={chartData}
-              dataKey="date"
-              series={[{ name: "tokens", label: "Tokens", color: "tangerine.5" }]}
-              maxBarWidth={18}
-              fillOpacity={0.9}
-              strokeDasharray="0"
-              tickLine="none"
-              valueFormatter={(value) => compactNumber.format(value)}
-              tooltipProps={{
-                offset: 20,
-                position: tooltipY === undefined
-                  ? undefined
-                  : { y: Math.min(Math.max(tooltipY - 28, 10), 126) }
-              }}
-              barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
-              barChartProps={{ margin: { top: 6, right: 4, bottom: 4, left: 0 } }}
-              xAxisProps={{ minTickGap: 32, tickMargin: 12 }}
-              yAxisProps={{ width: 44, tickFormatter: (value: number) => compactNumber.format(value) }}
-              className="activity-chart"
-              aria-label="Daily token usage bar chart"
-              onPointerMove={(event) => {
-                const bounds = event.currentTarget.getBoundingClientRect()
-                setTooltipY(event.clientY - bounds.top)
-              }}
-              onPointerLeave={() => setTooltipY(undefined)}
-            />
-          </Suspense>
-        </Box>
-      )}
-    </Panel>
-  )
-}
-
 function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonly title: string; readonly detail: string }) {
   return (
     <Center className="empty-state">
@@ -290,39 +227,6 @@ function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonl
         <Text size="xs" c="dimmed" maw={360}>{detail}</Text>
       </Stack>
     </Center>
-  )
-}
-
-function UsageTable({ rows }: { readonly rows: ReadonlyArray<UsageBreakdown> }) {
-  if (rows.length === 0) {
-    return <EmptyState icon={<DatabaseIcon />} title="No data yet" detail="There is no usage for this breakdown in the selected range." />
-  }
-
-  return (
-    <Table.ScrollContainer minWidth={430}>
-      <Table verticalSpacing="xs" horizontalSpacing="xs" highlightOnHover>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Name</Table.Th>
-            <Table.Th ta="right">Sessions</Table.Th>
-            <Table.Th ta="right">Turns</Table.Th>
-            <Table.Th ta="right">Tokens</Table.Th>
-            <Table.Th ta="right">Cost</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {rows.slice(0, 10).map((row) => (
-            <Table.Tr key={row.key}>
-              <Table.Td><Code>{row.label}</Code></Table.Td>
-              <Table.Td ta="right">{integer.format(row.sessions)}</Table.Td>
-              <Table.Td ta="right">{integer.format(row.turns)}</Table.Td>
-              <Table.Td ta="right">{compactNumber.format(row.tokens)}</Table.Td>
-              <Table.Td ta="right">{money.format(row.cost)}</Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
   )
 }
 
@@ -577,6 +481,14 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
   )
 }
 
+function ChartsFallback() {
+  return (
+    <Paper withBorder radius="md" className="panel chart-loading">
+      <Center h={220}><Loader size="sm" /></Center>
+    </Paper>
+  )
+}
+
 function Overview({ dashboard, cacheRate, toolSuccess }: {
   readonly dashboard: DashboardResponse | undefined
   readonly cacheRate: number
@@ -593,16 +505,14 @@ function Overview({ dashboard, cacheRate, toolSuccess }: {
         { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "yellow" },
         { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100, color: "teal" }
       ]} />
-      <ActivityChart data={dashboard?.daily ?? []} />
-      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
-        <Panel title="Models" detail="By token volume"><UsageTable rows={dashboard?.models ?? []} /></Panel>
-        <Panel title="Repositories" detail="Folder names"><UsageTable rows={dashboard?.repositories ?? []} /></Panel>
-      </SimpleGrid>
+      <Suspense fallback={<ChartsFallback />}>
+        <OverviewCharts dashboard={dashboard} />
+      </Suspense>
     </Stack>
   )
 }
 
-function Features({ dashboard, toolSuccess }: { readonly dashboard: DashboardResponse | undefined; readonly toolSuccess: number }) {
+function Analytics({ dashboard, toolSuccess }: { readonly dashboard: DashboardResponse | undefined; readonly toolSuccess: number }) {
   const summary = dashboard?.summary
   return (
     <Stack gap="sm">
@@ -612,64 +522,9 @@ function Features({ dashboard, toolSuccess }: { readonly dashboard: DashboardRes
         { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "tangerine" },
         { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "yellow" }
       ]} />
-      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
-        <Panel title="Thinking levels" detail="Usage distribution"><UsageTable rows={dashboard?.thinking ?? []} /></Panel>
-        <Panel title="Feature events" detail="Lifecycle counts">
-          <Stack gap={0} className="feature-list">
-            {dashboard?.features.map((feature) => (
-              <Group justify="space-between" wrap="nowrap" className="feature-row" key={`${feature.feature}-${feature.label}`}>
-                <Group wrap="nowrap" miw={0}>
-                  <ThemeIcon variant="light" color="gray" radius="md"><SparkleIcon /></ThemeIcon>
-                  <Box miw={0}>
-                    <Text size="sm" fw={600} tt="capitalize" truncate>{feature.label.replaceAll("_", " ")}</Text>
-                    <Text size="xs" c="dimmed" truncate>{feature.feature} · {feature.detail}</Text>
-                  </Box>
-                </Group>
-                <Badge variant="light" color="gray">{integer.format(feature.count)}</Badge>
-              </Group>
-            ))}
-            {(dashboard?.features.length ?? 0) === 0 && <EmptyState icon={<SparkleIcon />} title="No feature events" detail="Feature lifecycle events will appear here as agents use them." />}
-          </Stack>
-        </Panel>
-      </SimpleGrid>
-      <Panel title="Tool performance" detail="Top 50 tools">
-        {(dashboard?.tools.length ?? 0) === 0 ? (
-          <EmptyState icon={<WrenchIcon />} title="No tool calls" detail="Tool performance will appear after a session uses tools." />
-        ) : (
-          <Table.ScrollContainer minWidth={680}>
-            <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Tool</Table.Th>
-                  <Table.Th ta="right">Calls</Table.Th>
-                  <Table.Th ta="right">Errors</Table.Th>
-                  <Table.Th ta="right">Total time</Table.Th>
-                  <Table.Th ta="right">Success rate</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {dashboard?.tools.map((tool) => {
-                  const success = tool.calls === 0 ? 1 : 1 - tool.errors / tool.calls
-                  return (
-                    <Table.Tr key={tool.name}>
-                      <Table.Td><Code>{tool.name}</Code></Table.Td>
-                      <Table.Td ta="right">{integer.format(tool.calls)}</Table.Td>
-                      <Table.Td ta="right"><Text span c={tool.errors > 0 ? "red" : undefined}>{integer.format(tool.errors)}</Text></Table.Td>
-                      <Table.Td ta="right">{formatDuration(tool.durationMs)}</Table.Td>
-                      <Table.Td ta="right">
-                        <Group gap="sm" justify="flex-end" wrap="nowrap">
-                          <Progress value={success * 100} color={success > 0.95 ? "teal" : "orange"} w={64} size={5} />
-                          <Text size="sm" w={45}>{formatPercent(success)}</Text>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                  )
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Panel>
+      <Suspense fallback={<ChartsFallback />}>
+        <AnalyticsWorkspace dashboard={dashboard} />
+      </Suspense>
     </Stack>
   )
 }
@@ -725,7 +580,7 @@ function Sessions({ dashboard, setSession }: {
 
 const navigation: ReadonlyArray<{ readonly tab: Tab; readonly label: string; readonly icon: typeof ActivityIcon }> = [
   { tab: "overview", label: "Overview", icon: ActivityIcon },
-  { tab: "features", label: "Agent features", icon: TerminalWindowIcon },
+  { tab: "analytics", label: "Analytics", icon: ChartLineUpIcon },
   { tab: "sessions", label: "Sessions", icon: ListBulletsIcon },
   { tab: "settings", label: "Settings", icon: GearSixIcon }
 ]
@@ -897,7 +752,7 @@ export default function App() {
           {error && <Alert color="red" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{error}</Alert>}
           <Box key={tab} className="page-content">
             {tab === "overview" && <Overview dashboard={dashboard} cacheRate={cacheRate} toolSuccess={toolSuccess} />}
-            {tab === "features" && <Features dashboard={dashboard} toolSuccess={toolSuccess} />}
+            {tab === "analytics" && <Analytics dashboard={dashboard} toolSuccess={toolSuccess} />}
             {tab === "sessions" && <Sessions dashboard={dashboard} setSession={setSession} />}
             {tab === "settings" && <Settings onLogout={() => setAuth({ loading: false, authenticated: false, hasPasskey: true })} />}
           </Box>

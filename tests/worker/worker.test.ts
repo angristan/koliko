@@ -74,6 +74,84 @@ describe("Worker runtime", () => {
     expect(stored).toEqual({ event_id: "evt_1", total_tokens: 42 })
   })
 
+  it("aggregates detailed daily dimensions for charting", async () => {
+    await insertApiKey()
+    const baseEvent = {
+      schemaVersion: 1,
+      sessionId: "session_charts",
+      runtimeId: "runtime_charts",
+      occurredAt: "2026-07-21T12:00:00.000Z",
+      repository: "koliko"
+    }
+    const events = [
+      {
+        ...baseEvent,
+        id: "chart_usage",
+        sequence: 1,
+        type: "usage",
+        provider: "provider",
+        model: "model",
+        thinkingLevel: "high",
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 30,
+        cacheWriteTokens: 10,
+        totalTokens: 180,
+        costTotal: 0.25,
+        attributes: { source: "assistant" }
+      },
+      { ...baseEvent, id: "chart_run", sequence: 2, type: "agent_run", durationMs: 120_000, status: "completed" },
+      { ...baseEvent, id: "chart_tool_ok", sequence: 3, type: "tool_execution", toolName: "read", durationMs: 250, status: "completed" },
+      { ...baseEvent, id: "chart_tool_error", sequence: 4, type: "tool_execution", toolName: "bash", durationMs: 500, status: "error" },
+      { ...baseEvent, id: "chart_compaction", sequence: 5, type: "compaction", status: "completed", attributes: { reason: "manual", tokensBefore: 50_000 } },
+      { ...baseEvent, id: "chart_goal", sequence: 6, type: "goal", status: "completed" },
+      { ...baseEvent, id: "chart_subagent", sequence: 7, type: "subagent", status: "started", attributes: { action: "spawn" } }
+    ]
+
+    const ingestResponse = await fetchWorker(new Request("https://example.test/api/v1/events", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer klk_test_key",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        clientName: "koliko-pi-extension",
+        clientVersion: "0.1.0",
+        events
+      })
+    }))
+    expect(ingestResponse.status).toBe(202)
+
+    const response = await fetchWorker(new Request(
+      "https://example.test/api/dashboard?from=2026-07-21&to=2026-07-21",
+      { headers: { cookie: await sessionCookie() } }
+    ))
+    expect(response.status).toBe(200)
+    const result = await response.json() as {
+      from: string
+      to: string
+      daily: ReadonlyArray<Record<string, number | string>>
+    }
+    expect({ from: result.from, to: result.to }).toEqual({ from: "2026-07-21", to: "2026-07-21" })
+    expect(result.daily).toEqual([{
+      date: "2026-07-21",
+      sessions: 1,
+      turns: 1,
+      trackedMs: 120_000,
+      inputTokens: 100,
+      outputTokens: 40,
+      cacheReadTokens: 30,
+      cacheWriteTokens: 10,
+      tokens: 180,
+      cost: 0.25,
+      toolCalls: 2,
+      toolErrors: 1,
+      compactions: 1,
+      goals: 1,
+      subagents: 1
+    }])
+  })
+
   it("rejects invalid telemetry before persistence", async () => {
     await insertApiKey()
     const response = await fetchWorker(new Request("https://example.test/api/v1/events", {

@@ -46,7 +46,7 @@ const rows = async <S extends Schema.ConstraintDecoder<unknown>>(
   }
 }
 
-const rangeFromRequest = (request: Request): { from: string; to: string } => {
+const rangeFromRequest = (request: Request): { from: string; to: string; fromDate: string; toDate: string } => {
   const url = new URL(request.url)
   const now = new Date()
   const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000)
@@ -63,7 +63,12 @@ const rangeFromRequest = (request: Request): { from: string; to: string } => {
   }
 
   const toExclusive = new Date(inclusiveTo.getTime() + 24 * 60 * 60 * 1000)
-  return { from: from.toISOString(), to: toExclusive.toISOString() }
+  return {
+    from: from.toISOString(),
+    to: toExclusive.toISOString(),
+    fromDate: from.toISOString().slice(0, 10),
+    toDate: inclusiveTo.toISOString().slice(0, 10)
+  }
 }
 
 const SUMMARY_SQL = `
@@ -89,9 +94,19 @@ const DAILY_SQL = `
   SELECT
     substr(occurred_at, 1, 10) AS date,
     COUNT(DISTINCT session_id) AS sessions,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
     COALESCE(SUM(CASE WHEN event_type = 'agent_run' THEN duration_ms ELSE 0 END), 0) AS trackedMs,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN input_tokens ELSE 0 END), 0) AS inputTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN output_tokens ELSE 0 END), 0) AS outputTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_read_tokens ELSE 0 END), 0) AS cacheReadTokens,
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_write_tokens ELSE 0 END), 0) AS cacheWriteTokens,
     COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS tokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost
+    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost,
+    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' THEN 1 ELSE 0 END), 0) AS toolCalls,
+    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' AND status = 'error' THEN 1 ELSE 0 END), 0) AS toolErrors,
+    COALESCE(SUM(CASE WHEN event_type = 'compaction' THEN 1 ELSE 0 END), 0) AS compactions,
+    COALESCE(SUM(CASE WHEN event_type = 'goal' THEN 1 ELSE 0 END), 0) AS goals,
+    COALESCE(SUM(CASE WHEN event_type = 'subagent' THEN 1 ELSE 0 END), 0) AS subagents
   FROM telemetry_events
   WHERE occurred_at >= ? AND occurred_at < ?
   GROUP BY substr(occurred_at, 1, 10)
@@ -229,8 +244,8 @@ export const dashboard = async (request: Request, env: WorkerEnv): Promise<Respo
   })
 
   return json({
-    from: range.from,
-    to: range.to,
+    from: range.fromDate,
+    to: range.toDate,
     summary,
     daily,
     models,

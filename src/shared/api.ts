@@ -20,9 +20,19 @@ export class SummaryMetrics extends Schema.Class<SummaryMetrics>("SummaryMetrics
 export class DailyMetric extends Schema.Class<DailyMetric>("DailyMetric")({
   date: Schema.String,
   sessions: Schema.Number,
+  turns: Schema.Number,
   trackedMs: Schema.Number,
+  inputTokens: Schema.Number,
+  outputTokens: Schema.Number,
+  cacheReadTokens: Schema.Number,
+  cacheWriteTokens: Schema.Number,
   tokens: Schema.Number,
-  cost: Schema.Number
+  cost: Schema.Number,
+  toolCalls: Schema.Number,
+  toolErrors: Schema.Number,
+  compactions: Schema.Number,
+  goals: Schema.Number,
+  subagents: Schema.Number
 }) {}
 
 export class UsageBreakdown extends Schema.Class<UsageBreakdown>("UsageBreakdown")({

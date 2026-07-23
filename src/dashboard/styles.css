@@ -17,6 +17,17 @@
   --koliko-border: light-dark(#e4e3de, #2c2d31);
   --koliko-border-subtle: light-dark(#ebe9e0, #292a2e);
   --koliko-border-strong: light-dark(#c9c9c4, #3b3c42);
+  --koliko-chart-accent: #ff8205;
+  --koliko-chart-sand: light-dark(#c38d50, #d4a66f);
+  --koliko-chart-gold: light-dark(#b28a3e, #c9a563);
+  --koliko-chart-ochre: light-dark(#9d743f, #bb9466);
+  --koliko-chart-caramel: light-dark(#896b4e, #aa8d70);
+  --koliko-chart-taupe: light-dark(#776d62, #9b8f82);
+  --koliko-chart-bar-text: #17191a;
+  --koliko-heat-1: light-dark(#eee1cc, #393229);
+  --koliko-heat-2: light-dark(#e2c18c, #60482b);
+  --koliko-heat-3: light-dark(#d0a14c, #a06b2f);
+  --koliko-heat-4: light-dark(#c8761d, #db8e3e);
 }
 
 * {
@@ -289,38 +300,156 @@ a {
   border-bottom: 0;
 }
 
-.chart-wrap {
-  padding: 12px 16px 16px;
+.analytics-panel-header {
+  min-height: 52px;
 }
 
-.activity-chart {
+.analytics-primary-panel .analytics-panel-header {
+  min-height: 56px;
+}
+
+.analytics-chart-wrap,
+.bars-list-wrap,
+.donut-breakdown,
+.heatmap-scroll {
+  padding: 14px 16px 16px;
+}
+
+.analytics-chart-wrap {
+  min-height: 252px;
+}
+
+.analytics-chart {
   --chart-grid-color: light-dark(#e7e7e5, #292a2e);
   --chart-cursor-fill: light-dark(rgba(0, 0, 0, 0.055), rgba(255, 255, 255, 0.055));
   --chart-text-color: var(--mantine-color-dimmed);
 }
 
-.activity-chart .mantine-BarChart-axis {
+.analytics-chart :is(
+  .mantine-BarChart-axis,
+  .mantine-BubbleChart-axis,
+  .mantine-CompositeChart-axis
+) {
   font-size: 10px;
 }
 
-.activity-chart .mantine-ChartTooltip-tooltip {
-  min-width: 164px;
+.analytics-chart .mantine-ChartTooltip-tooltip {
+  min-width: 156px;
 }
 
-.activity-chart .mantine-ChartTooltip-tooltipLabel {
+.analytics-chart .mantine-ChartTooltip-tooltipLabel {
   padding: 8px 12px 5px;
   font-size: 13px;
   line-height: 1.25;
 }
 
-.activity-chart .mantine-ChartTooltip-tooltipBody {
+.analytics-chart .mantine-ChartTooltip-tooltipBody {
   padding: 0 12px 9px;
 }
 
-.activity-chart .mantine-ChartTooltip-tooltipItem {
+.analytics-chart .mantine-ChartTooltip-tooltipItem {
   font-size: 13px;
   line-height: 1.25;
 }
+
+.analytics-chart :is(
+  .mantine-BarChart-legend,
+  .mantine-CompositeChart-legend
+) {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 4px;
+}
+
+.bubble-tooltip {
+  border-color: var(--koliko-border-strong);
+  background: var(--koliko-surface-raised);
+}
+
+.chart-segmented {
+  flex: 0 0 auto;
+  background: var(--koliko-surface-active);
+}
+
+.chart-segmented .mantine-SegmentedControl-label {
+  padding-inline: 9px;
+}
+
+.chart-empty {
+  min-height: 220px;
+  padding: 24px;
+}
+
+.chart-loading {
+  min-height: 220px;
+}
+
+.donut-breakdown {
+  min-height: 264px;
+  display: grid;
+  grid-template-columns: 144px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.donut-breakdown-list {
+  min-width: 0;
+}
+
+.donut-breakdown-list .mantine-ColorSwatch-root {
+  flex: 0 0 auto;
+}
+
+.tabular-value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.bars-list-wrap {
+  min-height: 264px;
+}
+
+.bars-list-wrap .mantine-BarsList-barLabel {
+  overflow: hidden;
+  color: var(--koliko-chart-bar-text) !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bars-list-wrap .mantine-BarsList-barValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.heatmap-scroll {
+  min-height: 264px;
+}
+
+.analytics-heatmap {
+  min-width: max-content;
+  margin-inline: auto;
+  overflow: visible;
+}
+
+.bubble-chart-wrap {
+  min-height: 332px;
+}
+
+.analytics-tabs-list {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap;
+}
+
+.analytics-tabs .mantine-Tabs-tab {
+  min-height: 38px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.analytics-feature-list {
+  min-height: 264px;
+}
+
 
 .empty-state {
   min-height: 132px;
@@ -673,8 +802,43 @@ a {
   }
 
   .panel-header,
-  .chart-wrap {
+  .analytics-chart-wrap,
+  .bars-list-wrap,
+  .donut-breakdown,
+  .heatmap-scroll {
     padding-inline: 12px;
+  }
+
+  .analytics-primary-panel .analytics-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+    padding-block: 8px;
+  }
+
+  .chart-segmented {
+    width: 100%;
+  }
+
+  .chart-segmented .mantine-SegmentedControl-label {
+    padding-inline: 6px;
+  }
+
+  .analytics-tabs-list {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .analytics-tabs .mantine-Tabs-tab {
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 0;
+    justify-content: center;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .analytics-tabs .mantine-Tabs-tabSection {
+    display: none;
   }
 
   .key-create {

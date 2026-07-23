@@ -7,6 +7,7 @@ Koliko shows where agent time and tokens go without collecting the work itself. 
 ## What Koliko provides
 
 - Session, runtime, token, cost, and cache metrics
+- Interactive usage, cost, tool, session, and feature visualizations
 - Breakdowns by model, thinking level, and repository folder name
 - Tool duration and error-rate reporting
 - Compaction, goal, and sub-agent lifecycle counts
