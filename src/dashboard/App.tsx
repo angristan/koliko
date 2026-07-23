@@ -173,7 +173,7 @@ function MetricGrid({
 }) {
   return (
     <SimpleGrid
-      cols={{ base: 2, sm: 3, lg: metrics.length }}
+      cols={{ base: 2, sm: metrics.length }}
       spacing={{ base: "xs", sm: "sm" }}
       className="metric-grid"
     >
