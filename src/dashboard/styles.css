@@ -91,23 +91,37 @@ a {
   flex: 0 0 auto;
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--koliko-border);
+  border: 1px solid light-dark(#d8d6cf, #303136);
   border-radius: 9px;
-  background: var(--koliko-surface-active);
+  background: #17191a;
 }
 
 .brand-mark svg {
-  width: 20px;
-  height: 20px;
-  fill: var(--mantine-color-tangerine-6);
-  stroke: var(--mantine-color-tangerine-6);
-  stroke-width: 1.6;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.brand-mark svg path {
+.brand-mark .logo-stem {
   fill: none;
+  stroke: #f4f1e9;
+  stroke-width: 2.6;
+}
+
+.brand-mark .logo-branch {
+  fill: none;
+  stroke: #d6ad78;
+  stroke-width: 2.6;
+}
+
+.brand-mark .logo-node-center {
+  fill: #ff8205;
+}
+
+.brand-mark .logo-node-end {
+  fill: #f4f1e9;
 }
 
 .brand-name {

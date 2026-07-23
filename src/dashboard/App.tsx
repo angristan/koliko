@@ -117,11 +117,11 @@ const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly descri
 function LogoMark() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 17 9 12l4 3 7-9" />
-      <circle cx="4" cy="17" r="1.75" />
-      <circle cx="9" cy="12" r="1.75" />
-      <circle cx="13" cy="15" r="1.75" />
-      <circle cx="20" cy="6" r="1.75" />
+      <path className="logo-stem" d="M7 3.5v17" />
+      <path className="logo-branch" d="m8 12 10-7.5M8 12l10 7.5" />
+      <circle className="logo-node-center" cx="8" cy="12" r="2" />
+      <circle className="logo-node-end" cx="18" cy="4.5" r="1.5" />
+      <circle className="logo-node-end" cx="18" cy="19.5" r="1.5" />
     </svg>
   )
 }
