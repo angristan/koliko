@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import {
   DailyMetric,
   FeatureMetric,
@@ -14,16 +14,25 @@ import { HttpFailure, json, type WorkerEnv } from "./http"
 const AttributeValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean, Schema.Null])
 const Attributes = Schema.Record(Schema.String, AttributeValue)
 
-const decode = async <S extends Schema.ConstraintDecoder<unknown>>(
+const invalidDatabaseResult = (): HttpFailure => HttpFailure.make({
+  status: 500,
+  code: "invalid_database_result",
+  message: "Stored analytics data is invalid"
+})
+
+const queryFailed = (): HttpFailure => HttpFailure.make({
+  status: 500,
+  code: "query_failed",
+  message: "Analytics query failed"
+})
+
+const decode = <S extends Schema.ConstraintDecoder<unknown>>(
   schema: S,
   input: unknown
-): Promise<S["Type"]> => {
-  try {
-    return await Schema.decodeUnknownPromise(schema)(input)
-  } catch {
-    throw HttpFailure.make({ status: 500, code: "invalid_database_result", message: "Stored analytics data is invalid" })
-  }
-}
+): Effect.Effect<S["Type"], HttpFailure> =>
+  Schema.decodeUnknownEffect(schema)(input).pipe(
+    Effect.mapError(invalidDatabaseResult)
+  )
 
 const statement = (
   env: WorkerEnv,
@@ -31,22 +40,27 @@ const statement = (
   bindings: ReadonlyArray<string> = []
 ): D1PreparedStatement => env.DB.prepare(sql).bind(...bindings)
 
-const rows = async <S extends Schema.ConstraintDecoder<unknown>>(
+const rows = <S extends Schema.ConstraintDecoder<unknown>>(
   env: WorkerEnv,
   sql: string,
   schema: S,
   bindings: ReadonlyArray<string> = []
-): Promise<ReadonlyArray<S["Type"]>> => {
-  try {
-    const result = await statement(env, sql, bindings).all()
-    return await decode(Schema.Array(schema), result.results)
-  } catch (error) {
-    if (error instanceof HttpFailure) throw error
-    throw HttpFailure.make({ status: 500, code: "query_failed", message: "Analytics query failed" })
-  }
+): Effect.Effect<ReadonlyArray<S["Type"]>, HttpFailure> =>
+  Effect.tryPromise({
+    try: () => statement(env, sql, bindings).all(),
+    catch: queryFailed
+  }).pipe(
+    Effect.flatMap((result) => decode(Schema.Array(schema), result.results))
+  )
+
+interface DateRange {
+  readonly from: string
+  readonly to: string
+  readonly fromDate: string
+  readonly toDate: string
 }
 
-const rangeFromRequest = (request: Request): { from: string; to: string; fromDate: string; toDate: string } => {
+const rangeFromRequest = (request: Request): Effect.Effect<DateRange, HttpFailure> => Effect.gen(function*() {
   const url = new URL(request.url)
   const now = new Date()
   const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000)
@@ -56,10 +70,10 @@ const rangeFromRequest = (request: Request): { from: string; to: string; fromDat
   const inclusiveTo = new Date(`${toValue}T00:00:00.000Z`)
 
   if (!Number.isFinite(from.getTime()) || !Number.isFinite(inclusiveTo.getTime()) || from > inclusiveTo) {
-    throw HttpFailure.make({ status: 400, code: "invalid_date_range", message: "Date range is invalid" })
+    return yield* HttpFailure.make({ status: 400, code: "invalid_date_range", message: "Date range is invalid" })
   }
   if (inclusiveTo.getTime() - from.getTime() > 366 * 24 * 60 * 60 * 1000) {
-    throw HttpFailure.make({ status: 400, code: "date_range_too_large", message: "Date range cannot exceed 366 days" })
+    return yield* HttpFailure.make({ status: 400, code: "date_range_too_large", message: "Date range cannot exceed 366 days" })
   }
 
   const toExclusive = new Date(inclusiveTo.getTime() + 24 * 60 * 60 * 1000)
@@ -69,7 +83,7 @@ const rangeFromRequest = (request: Request): { from: string; to: string; fromDat
     fromDate: from.toISOString().slice(0, 10),
     toDate: inclusiveTo.toISOString().slice(0, 10)
   }
-}
+})
 
 const SUMMARY_SQL = `
   SELECT
@@ -180,15 +194,14 @@ const SESSIONS_SQL = `
   ORDER BY endedAt DESC
   LIMIT 50`
 
-export const dashboard = async (request: Request, env: WorkerEnv): Promise<Response> => {
-  await requireSession(request, env)
-  const range = rangeFromRequest(request)
+export const dashboard = Effect.fn("Analytics.dashboard")(function*(request: Request, env: WorkerEnv) {
+  yield* requireSession(request, env)
+  const range = yield* rangeFromRequest(request)
   const bindings = [range.from, range.to]
   const featureBindings = [...bindings, ...bindings, ...bindings]
 
-  let queryResults: D1Result<unknown>[]
-  try {
-    queryResults = await env.DB.batch([
+  const queryResults = yield* Effect.tryPromise({
+    try: () => env.DB.batch([
       statement(env, SUMMARY_SQL, bindings),
       statement(env, DAILY_SQL, bindings),
       statement(
@@ -205,17 +218,16 @@ export const dashboard = async (request: Request, env: WorkerEnv): Promise<Respo
       statement(env, TOOLS_SQL, bindings),
       statement(env, FEATURES_SQL, featureBindings),
       statement(env, SESSIONS_SQL, bindings)
-    ])
-  } catch {
-    throw HttpFailure.make({ status: 500, code: "query_failed", message: "Analytics query failed" })
-  }
+    ]),
+    catch: queryFailed
+  })
 
   const [summaryResult, dailyResult, modelsResult, thinkingResult, repositoriesResult, toolsResult, featuresResult, sessionsResult] = queryResults
   if (!summaryResult || !dailyResult || !modelsResult || !thinkingResult || !repositoriesResult || !toolsResult || !featuresResult || !sessionsResult) {
-    throw HttpFailure.make({ status: 500, code: "query_failed", message: "Analytics query failed" })
+    return yield* queryFailed()
   }
 
-  const [summaryRows, daily, models, thinking, repositories, tools, features, sessions] = await Promise.all([
+  const [summaryRows, daily, models, thinking, repositories, tools, features, sessions] = yield* Effect.all([
     decode(Schema.Array(SummaryMetrics), summaryResult.results),
     decode(Schema.Array(DailyMetric), dailyResult.results),
     decode(Schema.Array(UsageBreakdown), modelsResult.results),
@@ -224,7 +236,7 @@ export const dashboard = async (request: Request, env: WorkerEnv): Promise<Respo
     decode(Schema.Array(ToolMetric), toolsResult.results),
     decode(Schema.Array(FeatureMetric), featuresResult.results),
     decode(Schema.Array(SessionMetric), sessionsResult.results)
-  ])
+  ], { concurrency: "unbounded" })
 
   const summary = summaryRows[0] ?? SummaryMetrics.make({
     sessions: 0,
@@ -255,7 +267,7 @@ export const dashboard = async (request: Request, env: WorkerEnv): Promise<Respo
     features,
     sessions
   })
-}
+})
 
 const EventRow = Schema.Struct({
   event_id: Schema.String,
@@ -273,13 +285,13 @@ const EventRow = Schema.Struct({
   attributes_json: Schema.String
 })
 
-export const sessionDetail = async (
+export const sessionDetail = Effect.fn("Analytics.sessionDetail")(function*(
   request: Request,
   env: WorkerEnv,
   sessionId: string
-): Promise<Response> => {
-  await requireSession(request, env)
-  const selectedRows = await rows(
+) {
+  yield* requireSession(request, env)
+  const selectedRows = yield* rows(
     env,
     `SELECT event_id, occurred_at, event_type, repository, provider, model, thinking_level,
       duration_ms, total_tokens, cost_total, tool_name, status, attributes_json
@@ -289,34 +301,39 @@ export const sessionDetail = async (
   )
 
   if (selectedRows.length === 0) {
-    throw HttpFailure.make({ status: 404, code: "session_not_found", message: "Session was not found" })
+    return yield* HttpFailure.make({ status: 404, code: "session_not_found", message: "Session was not found" })
   }
 
   const truncated = selectedRows.length > 500
   const eventRows = selectedRows.slice(0, 500).reverse()
-  const events = await Promise.all(eventRows.map(async (event) => {
-    let attributes: typeof Attributes.Type
-    try {
-      attributes = await Schema.decodeUnknownPromise(Attributes)(JSON.parse(event.attributes_json))
-    } catch {
-      attributes = {}
-    }
+  const events = yield* Effect.forEach(eventRows, (event) => {
+    const attributes = Effect.try({
+      try: () => JSON.parse(event.attributes_json) as unknown,
+      catch: () => undefined
+    }).pipe(
+      Effect.orElseSucceed(() => undefined),
+      Effect.flatMap((value) => value === undefined
+        ? Effect.succeed({})
+        : Schema.decodeUnknownEffect(Attributes)(value).pipe(Effect.orElseSucceed(() => ({}))))
+    )
 
-    return SessionEvent.make({
-      id: event.event_id,
-      occurredAt: event.occurred_at,
-      type: event.event_type,
-      ...(event.provider !== null ? { provider: event.provider } : {}),
-      ...(event.model !== null ? { model: event.model } : {}),
-      ...(event.thinking_level !== null ? { thinkingLevel: event.thinking_level } : {}),
-      ...(event.duration_ms !== null ? { durationMs: event.duration_ms } : {}),
-      ...(event.total_tokens !== null ? { tokens: event.total_tokens } : {}),
-      ...(event.cost_total !== null ? { cost: event.cost_total } : {}),
-      ...(event.tool_name !== null ? { toolName: event.tool_name } : {}),
-      ...(event.status !== null ? { status: event.status } : {}),
-      attributes
-    })
-  }))
+    return attributes.pipe(
+      Effect.map((decoded) => SessionEvent.make({
+        id: event.event_id,
+        occurredAt: event.occurred_at,
+        type: event.event_type,
+        ...(event.provider !== null ? { provider: event.provider } : {}),
+        ...(event.model !== null ? { model: event.model } : {}),
+        ...(event.thinking_level !== null ? { thinkingLevel: event.thinking_level } : {}),
+        ...(event.duration_ms !== null ? { durationMs: event.duration_ms } : {}),
+        ...(event.total_tokens !== null ? { tokens: event.total_tokens } : {}),
+        ...(event.cost_total !== null ? { cost: event.cost_total } : {}),
+        ...(event.tool_name !== null ? { toolName: event.tool_name } : {}),
+        ...(event.status !== null ? { status: event.status } : {}),
+        attributes: decoded
+      }))
+    )
+  }, { concurrency: "unbounded" })
 
   return json({ sessionId, repository: eventRows[0].repository, events, truncated })
-}
+})

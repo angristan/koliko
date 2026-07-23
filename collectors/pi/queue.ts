@@ -1,6 +1,7 @@
 import { appendFile, chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises"
+import type { FileHandle } from "node:fs/promises"
 import { dirname } from "node:path"
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { IngestAccepted, IngestBatch, TelemetryEvent } from "../../src/shared/protocol"
 import type { LoadedConfig } from "./config"
 
@@ -8,48 +9,192 @@ const CLIENT_VERSION = "0.1.0"
 const LOCK_RETRY_MS = 10
 const STALE_LOCK_MS = 60_000
 
+class SpoolOperationError extends Schema.TaggedErrorClass<SpoolOperationError>()("SpoolOperationError", {
+  operation: Schema.String,
+  path: Schema.String,
+  message: Schema.String,
+  cause: Schema.Defect()
+}) {}
+
+class DeliveryError extends Schema.TaggedErrorClass<DeliveryError>()("DeliveryError", {
+  message: Schema.String,
+  cause: Schema.Defect()
+}) {}
+
 const errorCode = (error: unknown): string | undefined =>
   error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined
 
-const delay = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds))
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
-const removeStaleLock = async (path: string): Promise<void> => {
-  try {
-    const details = await stat(path)
-    if (Date.now() - details.mtimeMs <= STALE_LOCK_MS) return
-    await unlink(path)
-  } catch (error) {
-    if (errorCode(error) !== "ENOENT") throw error
-  }
-}
+const spoolFailure = (operation: string, path: string, cause: unknown): SpoolOperationError =>
+  SpoolOperationError.make({ operation, path, message: errorMessage(cause), cause })
 
-const withFileLock = async <T>(path: string, work: () => Promise<T>): Promise<T> => {
+const fileOperation = <A>(operation: string, path: string, run: () => Promise<A>): Effect.Effect<A, SpoolOperationError> =>
+  Effect.tryPromise({
+    try: run,
+    catch: (cause) => spoolFailure(operation, path, cause)
+  })
+
+const optionalOnCode = <A>(
+  effect: Effect.Effect<A, SpoolOperationError>,
+  code: string
+): Effect.Effect<A | undefined, SpoolOperationError> => effect.pipe(
+  Effect.catchIf(
+    (error) => errorCode(error.cause) === code,
+    () => Effect.succeed(undefined)
+  )
+)
+
+const removeStaleLock = Effect.fn("PiCollector.removeStaleLock")(function*(path: string) {
+  const details = yield* optionalOnCode(
+    fileOperation("inspect lock", path, () => stat(path)),
+    "ENOENT"
+  )
+  if (!details || Date.now() - details.mtimeMs <= STALE_LOCK_MS) return
+
+  yield* optionalOnCode(
+    fileOperation("remove stale lock", path, () => unlink(path)),
+    "ENOENT"
+  )
+})
+
+const acquireFileLock = Effect.fn("PiCollector.acquireFileLock")(function*(path: string) {
   const lockPath = `${path}.lock`
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+  yield* fileOperation("create spool directory", dirname(path), () => mkdir(dirname(path), { recursive: true, mode: 0o700 }))
 
-  let handle
-  while (!handle) {
-    try {
-      handle = await open(lockPath, "wx", 0o600)
-    } catch (error) {
-      if (errorCode(error) !== "EEXIST") throw error
-      await removeStaleLock(lockPath)
-      await delay(LOCK_RETRY_MS)
-    }
+  while (true) {
+    const handle = yield* optionalOnCode(
+      fileOperation("acquire lock", lockPath, () => open(lockPath, "wx", 0o600)),
+      "EEXIST"
+    )
+    if (handle) return { handle, lockPath }
+
+    yield* removeStaleLock(lockPath)
+    yield* Effect.sleep(LOCK_RETRY_MS)
+  }
+})
+
+const releaseFileLock = Effect.fn("PiCollector.releaseFileLock")(function*(resource: {
+  readonly handle: FileHandle
+  readonly lockPath: string
+}) {
+  yield* fileOperation("close lock", resource.lockPath, () => resource.handle.close())
+  yield* optionalOnCode(
+    fileOperation("remove lock", resource.lockPath, () => unlink(resource.lockPath)),
+    "ENOENT"
+  )
+})
+
+const withFileLock = <A, E, R>(
+  path: string,
+  work: () => Effect.Effect<A, E, R>
+): Effect.Effect<A, E | SpoolOperationError, R> =>
+  Effect.acquireUseRelease(
+    acquireFileLock(path),
+    work,
+    releaseFileLock
+  )
+
+const rewrite = Effect.fn("PiCollector.rewriteSpool")(function*(path: string, events: ReadonlyArray<TelemetryEvent>) {
+  yield* fileOperation("create spool directory", dirname(path), () => mkdir(dirname(path), { recursive: true, mode: 0o700 }))
+  const temporary = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`
+  const body = events.length > 0 ? `${events.map((event) => JSON.stringify(event)).join("\n")}\n` : ""
+  yield* fileOperation("write spool", temporary, () => writeFile(temporary, body, { encoding: "utf8", mode: 0o600 }))
+  yield* fileOperation("replace spool", path, () => rename(temporary, path))
+  yield* fileOperation("set spool permissions", path, () => chmod(path, 0o600))
+})
+
+const decodeSpoolLine = Effect.fn("PiCollector.decodeSpoolLine")(function*(line: string) {
+  const parsed = yield* Effect.try({
+    try: (): unknown => JSON.parse(line),
+    catch: (cause) => cause
+  })
+  return yield* Schema.decodeUnknownEffect(TelemetryEvent)(parsed)
+})
+
+const readAndQuarantine = Effect.fn("PiCollector.readAndQuarantine")(function*(path: string) {
+  const contents = yield* optionalOnCode(
+    fileOperation("read spool", path, () => readFile(path, "utf8")),
+    "ENOENT"
+  )
+  if (contents === undefined) return []
+
+  const valid: TelemetryEvent[] = []
+  const invalid: string[] = []
+  for (const line of contents.split("\n")) {
+    if (!line.trim()) continue
+    const event = yield* decodeSpoolLine(line).pipe(Effect.match({
+      onFailure: () => undefined,
+      onSuccess: (value) => value
+    }))
+    if (event) valid.push(event)
+    else invalid.push(line)
   }
 
-  try {
-    return await work()
-  } finally {
-    await handle.close()
-    try {
-      await unlink(lockPath)
-    } catch (error) {
-      if (errorCode(error) !== "ENOENT") throw error
-    }
+  if (invalid.length > 0) {
+    const invalidPath = `${path}.invalid`
+    yield* fileOperation("quarantine invalid events", invalidPath, () =>
+      appendFile(invalidPath, `${invalid.join("\n")}\n`, { encoding: "utf8", mode: 0o600 }))
+    yield* fileOperation("set quarantine permissions", invalidPath, () => chmod(invalidPath, 0o600))
+    yield* rewrite(path, valid)
   }
-}
+  return valid
+})
+
+const enqueueEffect = Effect.fn("PiCollector.enqueueTelemetry")(function*(path: string, event: TelemetryEvent) {
+  yield* withFileLock(path, () => Effect.gen(function*() {
+    yield* fileOperation("append event", path, () =>
+      appendFile(path, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 }))
+    yield* fileOperation("set spool permissions", path, () => chmod(path, 0o600))
+  }))
+})
+
+const flushEffect = Effect.fn("PiCollector.flushTelemetry")(function*(config: LoadedConfig, path: string) {
+  const valid = yield* withFileLock(path, () => readAndQuarantine(path))
+  if (valid.length === 0) return 0
+
+  const batch = valid.slice(0, 100)
+  const response = yield* Effect.tryPromise({
+    try: (signal) => fetch(`${config.baseUrl}/api/v1/events`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(IngestBatch.make({
+        clientName: "koliko-pi-extension",
+        clientVersion: CLIENT_VERSION,
+        events: batch
+      })),
+      signal
+    }),
+    catch: (cause) => DeliveryError.make({ message: errorMessage(cause), cause })
+  })
+
+  if (!response.ok) {
+    const cause = new Error(`Koliko ingest returned HTTP ${response.status}`)
+    return yield* Effect.fail(DeliveryError.make({ message: cause.message, cause }))
+  }
+  const body = yield* Effect.tryPromise({
+    try: () => response.json(),
+    catch: (cause) => DeliveryError.make({ message: errorMessage(cause), cause })
+  })
+  const acknowledgement = yield* Schema.decodeUnknownEffect(IngestAccepted)(body).pipe(
+    Effect.mapError((cause) => DeliveryError.make({ message: errorMessage(cause), cause }))
+  )
+  if (acknowledgement.accepted !== batch.length) {
+    const cause = new Error(`Koliko acknowledged ${acknowledgement.accepted} of ${batch.length} events`)
+    return yield* Effect.fail(DeliveryError.make({ message: cause.message, cause }))
+  }
+
+  const deliveredIds = new Set(batch.map((event) => event.id))
+  yield* withFileLock(path, () => Effect.gen(function*() {
+    const current = yield* readAndQuarantine(path)
+    yield* rewrite(path, current.filter((event) => !deliveredIds.has(event.id)))
+  }))
+  return batch.length
+})
 
 export class TelemetryQueue {
   private serialized: Promise<void> = Promise.resolve()
@@ -60,85 +205,11 @@ export class TelemetryQueue {
   ) {}
 
   enqueue(event: TelemetryEvent): Promise<void> {
-    return this.lock(() => withFileLock(this.path, async () => {
-      await appendFile(this.path, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 })
-      await chmod(this.path, 0o600)
-    }))
+    return this.lock(() => Effect.runPromise(enqueueEffect(this.path, event)))
   }
 
-  flush(): Promise<number> {
-    return this.lock(async () => {
-      const valid = await withFileLock(this.path, () => this.readAndQuarantine())
-      if (valid.length === 0) return 0
-
-      const batch = valid.slice(0, 100)
-      const response = await fetch(`${this.config.baseUrl}/api/v1/events`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${this.config.apiKey}`,
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(IngestBatch.make({
-          clientName: "koliko-pi-extension",
-          clientVersion: CLIENT_VERSION,
-          events: batch
-        }))
-      })
-
-      if (!response.ok) {
-        throw new Error(`Koliko ingest returned HTTP ${response.status}`)
-      }
-      const acknowledgement = await Schema.decodeUnknownPromise(IngestAccepted)(await response.json())
-      if (acknowledgement.accepted !== batch.length) {
-        throw new Error(`Koliko acknowledged ${acknowledgement.accepted} of ${batch.length} events`)
-      }
-
-      const deliveredIds = new Set(batch.map((event) => event.id))
-      await withFileLock(this.path, async () => {
-        const current = await this.readAndQuarantine()
-        await this.rewrite(current.filter((event) => !deliveredIds.has(event.id)))
-      })
-      return batch.length
-    })
-  }
-
-  private async readAndQuarantine(): Promise<ReadonlyArray<TelemetryEvent>> {
-    let contents: string
-    try {
-      contents = await readFile(this.path, "utf8")
-    } catch (error) {
-      if (errorCode(error) === "ENOENT") return []
-      throw error
-    }
-
-    const valid: TelemetryEvent[] = []
-    const invalid: string[] = []
-    for (const line of contents.split("\n")) {
-      if (!line.trim()) continue
-      try {
-        const parsed: unknown = JSON.parse(line)
-        valid.push(await Schema.decodeUnknownPromise(TelemetryEvent)(parsed))
-      } catch {
-        invalid.push(line)
-      }
-    }
-
-    if (invalid.length > 0) {
-      const invalidPath = `${this.path}.invalid`
-      await appendFile(invalidPath, `${invalid.join("\n")}\n`, { encoding: "utf8", mode: 0o600 })
-      await chmod(invalidPath, 0o600)
-      await this.rewrite(valid)
-    }
-    return valid
-  }
-
-  private async rewrite(events: ReadonlyArray<TelemetryEvent>): Promise<void> {
-    await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
-    const temporary = `${this.path}.${process.pid}.${crypto.randomUUID()}.tmp`
-    const body = events.length > 0 ? `${events.map((event) => JSON.stringify(event)).join("\n")}\n` : ""
-    await writeFile(temporary, body, { encoding: "utf8", mode: 0o600 })
-    await rename(temporary, this.path)
-    await chmod(this.path, 0o600)
+  flush(signal?: AbortSignal): Promise<number> {
+    return this.lock(() => Effect.runPromise(flushEffect(this.config, this.path), { signal }))
   }
 
   private lock<T>(work: () => Promise<T>): Promise<T> {

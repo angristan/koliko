@@ -22,6 +22,7 @@ export default defineConfig({
             || id.includes("node_modules/react-smooth")
           ) return "chart-engine"
           if (id.includes("node_modules/@cloudflare/kumo") || id.includes("node_modules/@base-ui") || id.includes("node_modules/@phosphor-icons")) return "ui"
+          if (id.includes("node_modules/@tanstack/query-core") || id.includes("node_modules/@tanstack/react-query")) return "query"
           if (id.includes("node_modules/effect")) return "effect"
           if (
             id.includes("node_modules/react/")

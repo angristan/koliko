@@ -1,3 +1,4 @@
+import { Effect } from "effect"
 import {
   authenticationOptions,
   authStatus,
@@ -11,10 +12,22 @@ import {
 } from "./auth"
 import { dashboard, sessionDetail } from "./analytics"
 import { errorResponse, HttpFailure, json, type WorkerEnv } from "./http"
-import { operationNames, traceOperation } from "./observability"
+import { operationNames, traceOperation, type OperationName } from "./observability"
 import { ingestTelemetry } from "./telemetry"
 
-const routeApi = async (
+const runRequest = (
+  request: Request,
+  effect: Effect.Effect<Response, HttpFailure>
+): Promise<Response> => Effect.runPromise(effect, { signal: request.signal })
+
+const runTracedRequest = (
+  request: Request,
+  context: ExecutionContext,
+  name: OperationName,
+  effect: Effect.Effect<Response, HttpFailure>
+): Promise<Response> => traceOperation(context, name, () => runRequest(request, effect))
+
+const routeApi = (
   request: Request,
   env: WorkerEnv,
   context: ExecutionContext
@@ -22,37 +35,39 @@ const routeApi = async (
   const url = new URL(request.url)
   const { pathname } = url
 
-  if (request.method === "GET" && pathname === "/api/auth/status") return authStatus(request, env)
-  if (request.method === "POST" && pathname === "/api/auth/register/options") return registrationOptions(request, env)
+  if (request.method === "GET" && pathname === "/api/auth/status") return runRequest(request, authStatus(request, env))
+  if (request.method === "POST" && pathname === "/api/auth/register/options") return runRequest(request, registrationOptions(request, env))
   if (request.method === "POST" && pathname === "/api/auth/register/verify") {
-    return traceOperation(context, operationNames.registerPasskey, () => verifyRegistration(request, env))
+    return runTracedRequest(request, context, operationNames.registerPasskey, verifyRegistration(request, env))
   }
-  if (request.method === "POST" && pathname === "/api/auth/login/options") return authenticationOptions(request, env)
+  if (request.method === "POST" && pathname === "/api/auth/login/options") return runRequest(request, authenticationOptions(request, env))
   if (request.method === "POST" && pathname === "/api/auth/login/verify") {
-    return traceOperation(context, operationNames.authenticatePasskey, () => verifyAuthentication(request, env))
+    return runTracedRequest(request, context, operationNames.authenticatePasskey, verifyAuthentication(request, env))
   }
-  if (request.method === "POST" && pathname === "/api/auth/logout") return logout(request, env)
+  if (request.method === "POST" && pathname === "/api/auth/logout") return runRequest(request, logout(request, env))
 
   if (request.method === "POST" && pathname === "/api/v1/events") {
-    return traceOperation(context, operationNames.ingestTelemetry, () => ingestTelemetry(request, env))
+    return runTracedRequest(request, context, operationNames.ingestTelemetry, ingestTelemetry(request, env))
   }
   if (request.method === "GET" && pathname === "/api/dashboard") {
-    return traceOperation(context, operationNames.loadDashboard, () => dashboard(request, env))
+    return runTracedRequest(request, context, operationNames.loadDashboard, dashboard(request, env))
   }
-  if (request.method === "GET" && pathname === "/api/keys") return listApiKeys(request, env)
+  if (request.method === "GET" && pathname === "/api/keys") return runRequest(request, listApiKeys(request, env))
   if (request.method === "POST" && pathname === "/api/keys") {
-    return traceOperation(context, operationNames.createApiKey, () => createApiKey(request, env))
+    return runTracedRequest(request, context, operationNames.createApiKey, createApiKey(request, env))
   }
 
   const keyMatch = pathname.match(/^\/api\/keys\/([^/]+)$/u)
-  if (request.method === "DELETE" && keyMatch) return revokeApiKey(request, env, decodeURIComponent(keyMatch[1]))
+  if (request.method === "DELETE" && keyMatch) {
+    return runRequest(request, revokeApiKey(request, env, decodeURIComponent(keyMatch[1])))
+  }
 
   const sessionMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/u)
   if (request.method === "GET" && sessionMatch) {
-    return sessionDetail(request, env, decodeURIComponent(sessionMatch[1]))
+    return runRequest(request, sessionDetail(request, env, decodeURIComponent(sessionMatch[1])))
   }
 
-  return json({ error: { code: "not_found", message: "API route was not found" } }, { status: 404 })
+  return Promise.resolve(json({ error: { code: "not_found", message: "API route was not found" } }, { status: 404 }))
 }
 
 export default {

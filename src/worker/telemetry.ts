@@ -77,23 +77,18 @@ const ingest = Effect.fn("Telemetry.ingest")(function*(apiKeyId: string, input: 
   return batch.events.length
 })
 
-export const ingestTelemetry = async (request: Request, env: WorkerEnv): Promise<Response> => {
-  const apiKeyId = await authorizeApiKey(request, env)
-  const input = await readJson(request)
-  const program = ingest(apiKeyId, input).pipe(
+export const ingestTelemetry = Effect.fn("Telemetry.ingestRequest")(function*(
+  request: Request,
+  env: WorkerEnv
+) {
+  const apiKeyId = yield* authorizeApiKey(request, env)
+  const input = yield* readJson(request)
+  const accepted = yield* ingest(apiKeyId, input).pipe(
     Effect.provideService(TelemetryRepository, makeRepository(env)),
-    Effect.match({
-      onFailure: (error) => {
-        if (error._tag === "InvalidTelemetry") {
-          return HttpFailure.make({ status: 400, code: "invalid_telemetry", message: error.message })
-        }
-        return HttpFailure.make({ status: 500, code: "storage_error", message: "Telemetry could not be stored" })
-      },
-      onSuccess: (accepted) => accepted
-    })
+    Effect.mapError((error) => error._tag === "InvalidTelemetry"
+      ? HttpFailure.make({ status: 400, code: "invalid_telemetry", message: error.message })
+      : HttpFailure.make({ status: 500, code: "storage_error", message: "Telemetry could not be stored" }))
   )
-  const result = await Effect.runPromise(program)
 
-  if (result instanceof HttpFailure) throw result
-  return json({ accepted: result }, { status: 202 })
-}
+  return json({ accepted }, { status: 202 })
+})

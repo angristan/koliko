@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
 import { basename } from "node:path"
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../../src/shared/protocol"
 import { configPath, loadConfig, saveBaseUrl, spoolPath, type LoadedConfig } from "./config"
 import { DeliveryMonitor } from "./delivery-monitor"
@@ -64,12 +64,15 @@ const usageProperty = async (value: unknown): Promise<UsageShape | undefined> =>
 const unknownProperty = (value: unknown, key: string): unknown =>
   isRecord(value) ? value[key] : undefined
 
-const withTimeout = async (work: Promise<unknown>, milliseconds: number): Promise<void> => {
-  await Promise.race([
-    work.then(() => undefined),
-    new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
-  ])
-}
+const flushWithin = Effect.fn("PiCollector.flushWithin")(function*(
+  flush: (signal: AbortSignal) => Promise<number>,
+  milliseconds: number
+) {
+  yield* Effect.raceFirst(
+    Effect.tryPromise({ try: flush, catch: () => undefined }).pipe(Effect.ignore),
+    Effect.sleep(milliseconds)
+  )
+})
 
 export default function kolikoExtension(pi: ExtensionAPI) {
   let config: LoadedConfig | undefined
@@ -102,8 +105,8 @@ export default function kolikoExtension(pi: ExtensionAPI) {
     }
   })
 
-  const flushQueue = (): Promise<number> =>
-    queue ? deliveryMonitor.flush(queue) : Promise.resolve(0)
+  const flushQueue = (signal?: AbortSignal): Promise<number> =>
+    queue ? deliveryMonitor.flush(queue, signal) : Promise.resolve(0)
 
   const flushInBackground = (): void => {
     void flushQueue().catch(() => undefined)
@@ -323,7 +326,7 @@ export default function kolikoExtension(pi: ExtensionAPI) {
       durationMs: Date.now() - runtimeStartedAt,
       attributes: { reason: event.reason }
     })
-    await withTimeout(flushQueue().catch(() => undefined), 2_000)
+    await Effect.runPromise(flushWithin((signal) => flushQueue(signal), 2_000))
   })
 
   pi.registerCommand("koliko-config", {

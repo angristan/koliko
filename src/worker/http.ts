@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 
 export type WorkerEnv = Env
 
@@ -44,17 +44,12 @@ export const makeCookie = (
 export const clearCookie = (name: string, origin: string): string =>
   makeCookie(name, "", origin, 0)
 
-export const assertSameOrigin = (request: Request, env: WorkerEnv): void => {
-  const origin = request.headers.get("origin")
-  if (origin !== env.EXPECTED_ORIGIN) {
-    throw HttpFailure.make({ status: 403, code: "invalid_origin", message: "Request origin is not allowed" })
-  }
-}
-
-export const readJson = async (request: Request): Promise<unknown> => {
-  try {
-    return await request.json()
-  } catch {
-    throw HttpFailure.make({ status: 400, code: "invalid_json", message: "Request body must be valid JSON" })
-  }
-}
+export const readJson = (request: Request): Effect.Effect<unknown, HttpFailure> =>
+  Effect.tryPromise({
+    try: () => request.json(),
+    catch: () => HttpFailure.make({
+      status: 400,
+      code: "invalid_json",
+      message: "Request body must be valid JSON"
+    })
+  })

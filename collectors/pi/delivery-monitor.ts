@@ -1,5 +1,5 @@
 export interface FlushableQueue {
-  flush(): Promise<number>
+  flush(signal?: AbortSignal): Promise<number>
 }
 
 export interface DeliveryFeedback {
@@ -19,9 +19,9 @@ export class DeliveryMonitor {
     return this.failing
   }
 
-  async flush(queue: FlushableQueue): Promise<number> {
+  async flush(queue: FlushableQueue, signal?: AbortSignal): Promise<number> {
     try {
-      const sent = await queue.flush()
+      const sent = await queue.flush(signal)
       if (this.failing) {
         this.failing = false
         this.feedback.onRecovery()

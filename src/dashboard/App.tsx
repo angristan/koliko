@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { lazy, Suspense, useMemo, useState, type ReactNode } from "react"
+import { useQuery } from "@tanstack/react-query"
 import {
   ActionIcon,
   Alert,
@@ -61,22 +62,18 @@ import {
   WarningCircleIcon,
   WrenchIcon
 } from "@phosphor-icons/react"
-import type {
-  ApiKeySummary,
-  DashboardResponse,
-  SessionDetailResponse
-} from "../shared/api"
+import type { DashboardResponse, SessionDetailResponse } from "../shared/api"
 import {
-  createApiKey,
-  getApiKeys,
-  getAuthStatus,
-  getDashboard,
-  getSession,
-  loginWithPasskey,
-  logout,
-  registerPasskey,
-  revokeApiKey
-} from "./api"
+  apiKeysQueryOptions,
+  authQueryOptions,
+  dashboardQueryOptions,
+  sessionQueryOptions,
+  useCreateApiKeyMutation,
+  useLoginMutation,
+  useLogoutMutation,
+  useRegisterPasskeyMutation,
+  useRevokeApiKeyMutation
+} from "./queries"
 
 type Tab = "overview" | "analytics" | "sessions" | "settings"
 
@@ -106,6 +103,8 @@ const formatDuration = (milliseconds: number): string => {
 }
 
 const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`
+const errorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback
 
 const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly description: string }>> = {
   overview: { title: "Overview", description: "See where your agent time, tokens, and spend are going." },
@@ -230,22 +229,19 @@ function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonl
   )
 }
 
-function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; readonly onAuthenticated: () => void }) {
+function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
   const [token, setToken] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string>()
+  const loginMutation = useLoginMutation()
+  const registerMutation = useRegisterPasskeyMutation()
+  const error = loginMutation.error ?? registerMutation.error
+  const busy = loginMutation.isPending || registerMutation.isPending
 
   const act = async () => {
-    setBusy(true)
-    setError(undefined)
     try {
-      if (hasPasskey) await loginWithPasskey()
-      else await registerPasskey(token)
-      onAuthenticated()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Authentication failed")
-    } finally {
-      setBusy(false)
+      if (hasPasskey) await loginMutation.mutateAsync()
+      else await registerMutation.mutateAsync(token)
+    } catch {
+      // The mutation keeps the typed error for the alert below.
     }
   }
 
@@ -281,7 +277,7 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
               </Text>
             </Box>
 
-            {error && <Alert color="red" icon={<WarningCircleIcon />} title="Authentication failed">{error}</Alert>}
+            {error && <Alert color="red" icon={<WarningCircleIcon />} title="Authentication failed">{errorMessage(error, "Authentication failed")}</Alert>}
 
             {!hasPasskey && (
               <PasswordInput
@@ -318,10 +314,24 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
   )
 }
 
-function SessionDrawer({ detail, onClose }: { readonly detail: SessionDetailResponse | undefined; readonly onClose: () => void }) {
+function SessionDrawer({
+  opened,
+  detail,
+  pending,
+  error,
+  onClose,
+  onRetry
+}: {
+  readonly opened: boolean
+  readonly detail: SessionDetailResponse | undefined
+  readonly pending: boolean
+  readonly error: unknown
+  readonly onClose: () => void
+  readonly onRetry: () => void
+}) {
   return (
     <Drawer
-      opened={detail !== undefined}
+      opened={opened}
       onClose={onClose}
       position="right"
       size="lg"
@@ -330,9 +340,18 @@ function SessionDrawer({ detail, onClose }: { readonly detail: SessionDetailResp
           <Text fw={700}>{detail.repository}</Text>
           <Text size="xs" c="dimmed">{detail.truncated ? `${detail.events.length} latest events` : `${detail.events.length} events`}</Text>
         </Box>
-      ) : undefined}
+      ) : "Session details"}
       classNames={{ content: "session-drawer", header: "session-drawer-header" }}
     >
+      {pending && <Center mih={240}><Loader type="dots" /></Center>}
+      {error !== null && (
+        <Alert color="red" icon={<WarningCircleIcon />} title="Session unavailable">
+          <Stack gap="sm">
+            <Text size="sm">{errorMessage(error, "Session could not be loaded")}</Text>
+            <Button variant="light" onClick={onRetry}>Retry</Button>
+          </Stack>
+        </Alert>
+      )}
       {detail?.truncated && <Alert color="yellow" mb="md">Showing the latest 500 events.</Alert>}
       <Stack gap={0} className="event-log">
         {detail?.events.map((event) => (
@@ -361,32 +380,25 @@ function SessionDrawer({ detail, onClose }: { readonly detail: SessionDetailResp
   )
 }
 
-function Settings({ onLogout }: { readonly onLogout: () => void }) {
-  const [keys, setKeys] = useState<ReadonlyArray<ApiKeySummary>>([])
+function Settings() {
+  const apiKeysQuery = useQuery(apiKeysQueryOptions())
+  const createMutation = useCreateApiKeyMutation()
+  const revokeMutation = useRevokeApiKeyMutation()
+  const registerMutation = useRegisterPasskeyMutation()
+  const logoutMutation = useLogoutMutation()
   const [name, setName] = useState("Local Pi collector")
   const [createdKey, setCreatedKey] = useState<string>()
-  const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string>()
+  const keys = apiKeysQuery.data?.keys ?? []
 
-  const refresh = useCallback(async () => {
-    const response = await getApiKeys()
-    setKeys(response.keys)
-  }, [])
-
-  useEffect(() => { void refresh() }, [refresh])
-
-  const create = async () => {
-    setBusy(true)
-    try {
-      const result = await createApiKey(name)
-      setCreatedKey(result.key)
-      setMessage("Copy this key now. It will not be shown again.")
-      await refresh()
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "API key could not be created")
-    } finally {
-      setBusy(false)
-    }
+  const create = () => {
+    createMutation.mutate(name, {
+      onSuccess: (result) => {
+        setCreatedKey(result.key)
+        setMessage("Copy this key now. It will not be shown again.")
+      },
+      onError: (cause) => setMessage(errorMessage(cause, "API key could not be created"))
+    })
   }
 
   return (
@@ -399,6 +411,7 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
               <Text size="xs" c="dimmed" mt={4}>Create one independently revocable key for each coding-agent collector. Only hashes are stored.</Text>
             </Box>
 
+            {apiKeysQuery.error !== null && <Alert color="red" icon={<WarningCircleIcon />}>{errorMessage(apiKeysQuery.error, "API keys could not be loaded")}</Alert>}
             {message && <Alert color={createdKey ? "tangerine" : "red"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
 
             {createdKey && (
@@ -418,12 +431,13 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
 
             <Group align="flex-end" wrap="nowrap" className="key-create">
               <TextInput label="Key name" value={name} onChange={(event) => setName(event.currentTarget.value)} flex={1} />
-              <Button loading={busy} onClick={() => void create()} leftSection={<KeyIcon />}>Create key</Button>
+              <Button loading={createMutation.isPending} onClick={create} leftSection={<KeyIcon />}>Create key</Button>
             </Group>
           </Stack>
 
           <Divider />
           <Stack gap={0} className="key-list">
+            {apiKeysQuery.isPending && <Center mih={120}><Loader type="dots" /></Center>}
             {keys.map((key) => (
               <Group key={key.id} justify="space-between" wrap="nowrap" className="key-row">
                 <Group wrap="nowrap" miw={0}>
@@ -437,11 +451,19 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
                   </Box>
                 </Group>
                 {!key.revokedAt && (
-                  <Button variant="subtle" color="red" size="compact-sm" onClick={() => void revokeApiKey(key.id).then(refresh)}>Revoke</Button>
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    size="compact-sm"
+                    loading={revokeMutation.isPending && revokeMutation.variables === key.id}
+                    onClick={() => revokeMutation.mutate(key.id, {
+                      onError: (cause) => setMessage(errorMessage(cause, "API key could not be revoked"))
+                    })}
+                  >Revoke</Button>
                 )}
               </Group>
             ))}
-            {keys.length === 0 && <EmptyState icon={<KeyIcon />} title="No collector keys" detail="Create your first key to connect a coding agent." />}
+            {!apiKeysQuery.isPending && keys.length === 0 && <EmptyState icon={<KeyIcon />} title="No collector keys" detail="Create your first key to connect a coding agent." />}
           </Stack>
         </Panel>
       </Box>
@@ -454,8 +476,24 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
               <Text size="sm" fw={600}>Passwordless security</Text>
               <Text size="xs" c="dimmed" mt={4}>User verification is required for every dashboard sign-in.</Text>
             </Box>
-            <Button variant="light" onClick={() => void registerPasskey().then(() => setMessage("Passkey added."))} leftSection={<ShieldCheckIcon />}>Add passkey</Button>
-            <Button variant="subtle" color="gray" onClick={() => void logout().then(onLogout)} leftSection={<SignOutIcon />}>Sign out</Button>
+            <Button
+              variant="light"
+              loading={registerMutation.isPending}
+              onClick={() => registerMutation.mutate(undefined, {
+                onSuccess: () => setMessage("Passkey added."),
+                onError: (cause) => setMessage(errorMessage(cause, "Passkey could not be added"))
+              })}
+              leftSection={<ShieldCheckIcon />}
+            >Add passkey</Button>
+            <Button
+              variant="subtle"
+              color="gray"
+              loading={logoutMutation.isPending}
+              onClick={() => logoutMutation.mutate(undefined, {
+                onError: (cause) => setMessage(errorMessage(cause, "Could not sign out"))
+              })}
+              leftSection={<SignOutIcon />}
+            >Sign out</Button>
           </Stack>
         </Panel>
 
@@ -529,9 +567,9 @@ function Analytics({ dashboard, toolSuccess }: { readonly dashboard: DashboardRe
   )
 }
 
-function Sessions({ dashboard, setSession }: {
+function Sessions({ dashboard, setSessionId }: {
   readonly dashboard: DashboardResponse | undefined
-  readonly setSession: (session: SessionDetailResponse | undefined) => void
+  readonly setSessionId: (sessionId: string) => void
 }) {
   return (
     <Panel title="Recent sessions" detail="Latest 50">
@@ -566,7 +604,7 @@ function Sessions({ dashboard, setSession }: {
                   <Table.Td ta="right">{compactNumber.format(row.tokens)}</Table.Td>
                   <Table.Td ta="right">{money.format(row.cost)}</Table.Td>
                   <Table.Td ta="right">
-                    <Button size="compact-sm" variant="subtle" rightSection={<ArrowRightIcon />} onClick={() => void getSession(row.id).then(setSession)}>Inspect</Button>
+                    <Button size="compact-sm" variant="subtle" rightSection={<ArrowRightIcon />} onClick={() => setSessionId(row.id)}>Inspect</Button>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -586,17 +624,9 @@ const navigation: ReadonlyArray<{ readonly tab: Tab; readonly label: string; rea
 ]
 
 export default function App() {
-  const [auth, setAuth] = useState<{
-    readonly loading: boolean
-    readonly authenticated: boolean
-    readonly hasPasskey: boolean
-  }>({ loading: true, authenticated: false, hasPasskey: false })
   const [tab, setTab] = useState<Tab>("overview")
   const [days, setDays] = useState(30)
-  const [dashboard, setDashboard] = useState<DashboardResponse>()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string>()
-  const [session, setSession] = useState<SessionDetailResponse>()
+  const [sessionId, setSessionId] = useState<string>()
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)
   const [mobileOpened, mobileNavigation] = useDisclosure(false)
   const isDesktop = useMediaQuery("(min-width: 48em)")
@@ -604,31 +634,34 @@ export default function App() {
   const { toggleColorScheme } = useMantineColorScheme()
 
   const range = useMemo(() => rangeForDays(days), [days])
-  const refreshAuth = useCallback(async () => {
-    const status = await getAuthStatus()
-    setAuth({ loading: false, authenticated: status.authenticated, hasPasskey: status.hasPasskey })
-  }, [])
+  const authQuery = useQuery(authQueryOptions())
+  const dashboardQuery = useQuery({
+    ...dashboardQueryOptions(range.from, range.to),
+    enabled: authQuery.data?.authenticated === true
+  })
+  const sessionQuery = useQuery({
+    ...sessionQueryOptions(sessionId ?? ""),
+    enabled: sessionId !== undefined
+  })
 
-  const refreshDashboard = useCallback(async () => {
-    setLoading(true)
-    setError(undefined)
-    try {
-      setDashboard(await getDashboard(range.from, range.to))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Dashboard could not be loaded")
-    } finally {
-      setLoading(false)
-    }
-  }, [range.from, range.to])
-
-  useEffect(() => { void refreshAuth() }, [refreshAuth])
-  useEffect(() => { if (auth.authenticated) void refreshDashboard() }, [auth.authenticated, refreshDashboard])
-
-  if (auth.loading) {
+  if (authQuery.isPending) {
     return <Center mih="100vh"><Stack align="center" gap="sm"><Loader type="dots" /><Text size="sm" c="dimmed">Loading Koliko</Text></Stack></Center>
   }
-  if (!auth.authenticated) return <Login hasPasskey={auth.hasPasskey} onAuthenticated={() => void refreshAuth()} />
+  if (authQuery.isError) {
+    return (
+      <Center mih="100vh">
+        <Alert color="red" icon={<WarningCircleIcon />} title="Koliko could not be loaded">
+          <Stack gap="sm">
+            <Text size="sm">{errorMessage(authQuery.error, "Authentication status could not be loaded")}</Text>
+            <Button variant="light" onClick={() => void authQuery.refetch()}>Retry</Button>
+          </Stack>
+        </Alert>
+      </Center>
+    )
+  }
+  if (!authQuery.data.authenticated) return <Login hasPasskey={authQuery.data.hasPasskey} />
 
+  const dashboard = dashboardQuery.data
   const summary = dashboard?.summary
   const cacheDenominator = (summary?.inputTokens ?? 0) + (summary?.cacheReadTokens ?? 0)
   const cacheRate = cacheDenominator === 0 ? 0 : (summary?.cacheReadTokens ?? 0) / cacheDenominator
@@ -675,7 +708,7 @@ export default function App() {
                   className="range-control"
                 />
                 <Tooltip label="Refresh dashboard">
-                  <ActionIcon variant="default" size="lg" aria-label="Refresh dashboard" loading={loading} onClick={() => void refreshDashboard()}>
+                  <ActionIcon variant="default" size="lg" aria-label="Refresh dashboard" loading={dashboardQuery.isFetching} onClick={() => void dashboardQuery.refetch()}>
                     <ArrowClockwiseIcon />
                   </ActionIcon>
                 </Tooltip>
@@ -749,17 +782,30 @@ export default function App() {
             <Text c="dimmed" mt={6}>{page.description}</Text>
           </Box>
 
-          {error && <Alert color="red" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{error}</Alert>}
+          {dashboardQuery.error !== null && <Alert color="red" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{errorMessage(dashboardQuery.error, "Dashboard could not be loaded")}</Alert>}
           <Box key={tab} className="page-content">
-            {tab === "overview" && <Overview dashboard={dashboard} cacheRate={cacheRate} toolSuccess={toolSuccess} />}
-            {tab === "analytics" && <Analytics dashboard={dashboard} toolSuccess={toolSuccess} />}
-            {tab === "sessions" && <Sessions dashboard={dashboard} setSession={setSession} />}
-            {tab === "settings" && <Settings onLogout={() => setAuth({ loading: false, authenticated: false, hasPasskey: true })} />}
+            {dashboardQuery.isPending && tab !== "settings"
+              ? <Center mih={320}><Loader type="dots" /></Center>
+              : (
+                <>
+                  {tab === "overview" && <Overview dashboard={dashboard} cacheRate={cacheRate} toolSuccess={toolSuccess} />}
+                  {tab === "analytics" && <Analytics dashboard={dashboard} toolSuccess={toolSuccess} />}
+                  {tab === "sessions" && <Sessions dashboard={dashboard} setSessionId={setSessionId} />}
+                  {tab === "settings" && <Settings />}
+                </>
+              )}
           </Box>
         </Box>
       </AppShell.Main>
 
-      <SessionDrawer detail={session} onClose={() => setSession(undefined)} />
+      <SessionDrawer
+        opened={sessionId !== undefined}
+        detail={sessionQuery.data}
+        pending={sessionQuery.isPending}
+        error={sessionQuery.error}
+        onClose={() => setSessionId(undefined)}
+        onRetry={() => { void sessionQuery.refetch() }}
+      />
     </AppShell>
   )
 }
