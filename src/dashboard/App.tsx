@@ -30,7 +30,8 @@ import {
   Title,
   Tooltip,
   useComputedColorScheme,
-  useMantineColorScheme
+  useMantineColorScheme,
+  type MantineColor
 } from "@mantine/core"
 import { useDisclosure, useMediaQuery } from "@mantine/hooks"
 import {
@@ -138,7 +139,7 @@ function Brand({ compact = false }: { readonly compact?: boolean }) {
       <span className="brand-mark"><LogoMark /></span>
       {!compact && (
         <Box>
-          <Text fw={750} lh={1.05} className="brand-name">koliko</Text>
+          <Text fw={700} lh={1.05} className="brand-name">koliko</Text>
           <Text size="xs" c="dimmed" mt={3}>Agent analytics</Text>
         </Box>
       )}
@@ -167,6 +168,7 @@ function MetricGrid({
     readonly value: string
     readonly detail?: string
     readonly progress?: number
+    readonly color?: MantineColor
   }>
 }) {
   return (
@@ -185,14 +187,14 @@ function MetricGrid({
         >
           <Group justify="space-between" align="center" gap={4} wrap="nowrap">
             <Text size="xs" fw={600} c="dimmed" className="metric-label" truncate>{metric.label}</Text>
-            <ThemeIcon variant="light" color="gray" radius="sm" size={24} className="metric-icon">
+            <ThemeIcon variant="light" color={metric.color ?? "gray"} radius="sm" size={24} className="metric-icon">
               {metricVisuals[metric.label] ?? <ActivityIcon />}
             </ThemeIcon>
           </Group>
           <Text className="metric-value" mt={6}>{metric.value}</Text>
           {metric.detail && <Text size="xs" c="dimmed" mt={1} truncate>{metric.detail}</Text>}
           {metric.progress !== undefined && (
-            <Progress value={Math.max(0, Math.min(100, metric.progress))} color="indigo" size={2} radius="xl" mt={5} />
+            <Progress value={Math.max(0, Math.min(100, metric.progress))} color={metric.color ?? "tangerine"} size={2} radius="xl" mt={5} />
           )}
         </Card>
       ))}
@@ -214,7 +216,7 @@ function Panel({
   return (
     <Paper withBorder radius="md" className={`panel ${className}`.trim()}>
       <Group justify="space-between" gap="sm" className="panel-header">
-        <Text fw={700}>{title}</Text>
+        <Text fw={600} className="panel-title">{title}</Text>
         {detail && <Text size="xs" c="dimmed">{detail}</Text>}
       </Group>
       <Divider />
@@ -248,7 +250,7 @@ function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) 
               h={190}
               data={chartData}
               dataKey="date"
-              series={[{ name: "tokens", label: "Tokens", color: "blue.5" }]}
+              series={[{ name: "tokens", label: "Tokens", color: "tangerine.5" }]}
               maxBarWidth={18}
               fillOpacity={0.9}
               strokeDasharray="0"
@@ -282,9 +284,9 @@ function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) 
 function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonly title: string; readonly detail: string }) {
   return (
     <Center className="empty-state">
-      <Stack align="center" gap={7} ta="center">
+      <Stack align="center" gap="xs" ta="center">
         <ThemeIcon size={42} radius="xl" variant="light" color="gray">{icon}</ThemeIcon>
-        <Text size="sm" fw={650}>{title}</Text>
+        <Text size="sm" fw={600}>{title}</Text>
         <Text size="xs" c="dimmed" maw={360}>{detail}</Text>
       </Stack>
     </Center>
@@ -349,7 +351,7 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
         <section className="auth-showcase">
           <Brand />
           <Stack gap="lg" className="auth-showcase-copy">
-            <Badge variant="light" color="indigo" leftSection={<SparkleIcon size={12} />}>Private by design</Badge>
+            <Badge variant="light" color="tangerine" leftSection={<SparkleIcon size={12} />}>Private by design</Badge>
             <Title order={1}>Clarity for every<br /><span>agent run.</span></Title>
             <Text c="dimmed" maw={480}>Understand time, tokens, costs, and workflows without collecting the work itself.</Text>
           </Stack>
@@ -366,7 +368,7 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
         <section className="auth-form">
           <Stack gap="xl">
             <Box>
-              <ThemeIcon size={48} radius="md" variant="light" color="indigo" mb="lg">
+              <ThemeIcon size={48} radius="md" variant="light" color="tangerine" mb="lg">
                 {hasPasskey ? <LockKeyIcon size={24} /> : <ShieldCheckIcon size={24} />}
               </ThemeIcon>
               <Title order={2}>{hasPasskey ? "Welcome back" : "Set up your workspace"}</Title>
@@ -434,15 +436,15 @@ function SessionDrawer({ detail, onClose }: { readonly detail: SessionDetailResp
             <span className="event-dot" />
             <Box className="event-content">
               <Group justify="space-between" gap="md" align="flex-start">
-                <Text size="sm" fw={650} tt="capitalize">{event.type.replaceAll("_", " ")}</Text>
+                <Text size="sm" fw={600} tt="capitalize">{event.type.replaceAll("_", " ")}</Text>
                 <Text size="xs" c="dimmed" ff="monospace">
                   {new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                 </Text>
               </Group>
-              <Group gap={7} mt={7}>
+              <Group gap="xs" mt="xs">
                 {event.toolName && <Code>{event.toolName}</Code>}
                 {event.model && <Badge variant="light" color="gray">{event.provider}/{event.model}</Badge>}
-                {event.tokens !== undefined && <Badge variant="light" color="indigo">{compactNumber.format(event.tokens)} tokens</Badge>}
+                {event.tokens !== undefined && <Badge variant="light" color="tangerine">{compactNumber.format(event.tokens)} tokens</Badge>}
                 {event.cost !== undefined && <Badge variant="light" color="gray">{money.format(event.cost)}</Badge>}
                 {event.durationMs !== undefined && <Badge variant="light" color="gray">{formatDuration(event.durationMs)}</Badge>}
                 {event.status === "error" && <Badge color="red" variant="light">error</Badge>}
@@ -489,11 +491,11 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
         <Panel title="Collector API keys" detail="Ingestion access">
           <Stack p="md" gap="md">
             <Box>
-              <Text size="sm" fw={650}>Connect a collector</Text>
+              <Text size="sm" fw={600}>Connect a collector</Text>
               <Text size="xs" c="dimmed" mt={4}>Create one independently revocable key for each coding-agent collector. Only hashes are stored.</Text>
             </Box>
 
-            {message && <Alert color={createdKey ? "indigo" : "red"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
+            {message && <Alert color={createdKey ? "tangerine" : "red"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
 
             {createdKey && (
               <Paper withBorder radius="md" p="md" className="created-key">
@@ -501,7 +503,7 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
                   <Code className="created-key-value">{createdKey}</Code>
                   <CopyButton value={createdKey} timeout={1600}>
                     {({ copied, copy }) => (
-                      <Button variant="light" color={copied ? "teal" : "indigo"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
+                      <Button variant="light" color={copied ? "teal" : "tangerine"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
                         {copied ? "Copied" : "Copy"}
                       </Button>
                     )}
@@ -521,10 +523,10 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
             {keys.map((key) => (
               <Group key={key.id} justify="space-between" wrap="nowrap" className="key-row">
                 <Group wrap="nowrap" miw={0}>
-                  <ThemeIcon variant="light" color={key.revokedAt ? "gray" : "indigo"} radius="md"><KeyIcon /></ThemeIcon>
+                  <ThemeIcon variant="light" color={key.revokedAt ? "gray" : "tangerine"} radius="md"><KeyIcon /></ThemeIcon>
                   <Box miw={0}>
                     <Group gap="xs">
-                      <Text size="sm" fw={650} truncate>{key.name}</Text>
+                      <Text size="sm" fw={600} truncate>{key.name}</Text>
                       {key.revokedAt && <Badge size="xs" variant="light" color="gray">Revoked</Badge>}
                     </Group>
                     <Text size="xs" c="dimmed" truncate>{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</Text>
@@ -543,9 +545,9 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
       <Stack gap="md" className="settings-side">
         <Panel title="Passkeys">
           <Stack p="md" gap="sm">
-            <ThemeIcon size={40} radius="md" variant="light" color="indigo"><ShieldCheckIcon /></ThemeIcon>
+            <ThemeIcon size={40} radius="md" variant="light" color="tangerine"><ShieldCheckIcon /></ThemeIcon>
             <Box>
-              <Text size="sm" fw={650}>Passwordless security</Text>
+              <Text size="sm" fw={600}>Passwordless security</Text>
               <Text size="xs" c="dimmed" mt={4}>User verification is required for every dashboard sign-in.</Text>
             </Box>
             <Button variant="light" onClick={() => void registerPasskey().then(() => setMessage("Passkey added."))} leftSection={<ShieldCheckIcon />}>Add passkey</Button>
@@ -563,7 +565,7 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
               <Group key={label} align="flex-start" wrap="nowrap">
                 <CheckCircleIcon size={18} className="privacy-check" />
                 <Box>
-                  <Text size="xs" fw={700}>{label}</Text>
+                  <Text size="xs" fw={600}>{label}</Text>
                   <Text size="xs" c="dimmed" mt={2}>{detail}</Text>
                 </Box>
               </Group>
@@ -584,12 +586,12 @@ function Overview({ dashboard, cacheRate, toolSuccess }: {
   return (
     <Stack gap="sm">
       <MetricGrid metrics={[
-        { label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns` },
-        { label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime" },
-        { label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output` },
-        { label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported" },
-        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100 },
-        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100 }
+        { label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns`, color: "tangerine" },
+        { label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime", color: "yellow" },
+        { label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output`, color: "tangerine" },
+        { label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported", color: "orange" },
+        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "yellow" },
+        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100, color: "teal" }
       ]} />
       <ActivityChart data={dashboard?.daily ?? []} />
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
@@ -605,10 +607,10 @@ function Features({ dashboard, toolSuccess }: { readonly dashboard: DashboardRes
   return (
     <Stack gap="sm">
       <MetricGrid metrics={[
-        { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful`, progress: toolSuccess * 100 },
-        { label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints" },
-        { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates" },
-        { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work" }
+        { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful`, progress: toolSuccess * 100, color: "teal" },
+        { label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints", color: "orange" },
+        { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "tangerine" },
+        { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "yellow" }
       ]} />
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
         <Panel title="Thinking levels" detail="Usage distribution"><UsageTable rows={dashboard?.thinking ?? []} /></Panel>
@@ -619,7 +621,7 @@ function Features({ dashboard, toolSuccess }: { readonly dashboard: DashboardRes
                 <Group wrap="nowrap" miw={0}>
                   <ThemeIcon variant="light" color="gray" radius="md"><SparkleIcon /></ThemeIcon>
                   <Box miw={0}>
-                    <Text size="sm" fw={650} tt="capitalize" truncate>{feature.label.replaceAll("_", " ")}</Text>
+                    <Text size="sm" fw={600} tt="capitalize" truncate>{feature.label.replaceAll("_", " ")}</Text>
                     <Text size="xs" c="dimmed" truncate>{feature.feature} · {feature.detail}</Text>
                   </Box>
                 </Group>
@@ -699,8 +701,8 @@ function Sessions({ dashboard, setSession }: {
                 <Table.Tr key={row.id}>
                   <Table.Td>
                     <Group gap="sm" wrap="nowrap">
-                      <ThemeIcon size="sm" variant="light" color="indigo" radius="sm"><TerminalWindowIcon /></ThemeIcon>
-                      <Text size="sm" fw={650}>{row.repository}</Text>
+                      <ThemeIcon size="sm" variant="light" color="tangerine" radius="sm"><TerminalWindowIcon /></ThemeIcon>
+                      <Text size="sm" fw={600}>{row.repository}</Text>
                     </Group>
                   </Table.Td>
                   <Table.Td><Text size="sm" c="dimmed">{new Date(row.endedAt).toLocaleString()}</Text></Table.Td>

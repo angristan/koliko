@@ -1,3 +1,24 @@
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+:root {
+  --koliko-bg: light-dark(#f5f4ef, #111214);
+  --koliko-surface-nav: light-dark(#fbfbf8, #151619);
+  --koliko-surface: light-dark(#fbfbf8, #18191c);
+  --koliko-surface-raised: light-dark(#fff, #1b1c20);
+  --koliko-surface-muted: light-dark(#f5f4ef, rgba(255, 255, 255, 0.018));
+  --koliko-surface-hover: light-dark(#f5f4ef, #1c1d21);
+  --koliko-surface-active: light-dark(#ebe9e0, #202125);
+  --koliko-border: light-dark(#e4e3de, #2c2d31);
+  --koliko-border-subtle: light-dark(#ebe9e0, #292a2e);
+  --koliko-border-strong: light-dark(#c9c9c4, #3b3c42);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -12,7 +33,7 @@ body,
 
 body {
   min-height: 100vh;
-  background: light-dark(#f6f6f5, #111214);
+  background: var(--koliko-bg);
   color: var(--mantine-color-text);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -24,18 +45,18 @@ a {
 }
 
 .app-shell {
-  --app-shell-border-color: light-dark(#e2e2e0, #292a2e);
-  background: light-dark(#f6f6f5, #111214);
+  --app-shell-border-color: light-dark(#e4e3de, #292a2e);
+  background: var(--koliko-bg);
 }
 
 .app-header {
   border-bottom: 1px solid var(--app-shell-border-color);
-  background: light-dark(#fafaf9, #151619);
+  background: var(--koliko-surface-nav);
 }
 
 .app-navbar {
   border-right: 1px solid var(--app-shell-border-color);
-  background: light-dark(#fafaf9, #151619);
+  background: var(--koliko-surface-nav);
   transition: width 160ms ease;
 }
 
@@ -59,16 +80,16 @@ a {
   flex: 0 0 auto;
   position: relative;
   overflow: hidden;
-  border: 1px solid light-dark(#d8d8d6, #34353a);
+  border: 1px solid var(--koliko-border);
   border-radius: 9px;
-  background: light-dark(#f0f0ef, #202125);
+  background: var(--koliko-surface-active);
 }
 
 .brand-mark svg {
   width: 20px;
   height: 20px;
-  fill: var(--mantine-color-indigo-6);
-  stroke: var(--mantine-color-indigo-6);
+  fill: var(--mantine-color-tangerine-6);
+  stroke: var(--mantine-color-tangerine-6);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -80,11 +101,11 @@ a {
 
 .brand-name {
   font-size: 15px;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.015em;
 }
 
 .metric-label {
-  font-size: 10px;
+  font-size: var(--mantine-font-size-xs);
   letter-spacing: 0;
 }
 
@@ -102,12 +123,12 @@ a {
 
 .nav-item:hover {
   color: var(--mantine-color-text);
-  background: light-dark(#efefed, #1c1d21);
+  background: var(--koliko-surface-hover);
 }
 
 .nav-item[data-active] {
   color: var(--mantine-color-text);
-  background: light-dark(#e9e9e7, #202125);
+  background: var(--koliko-surface-active);
   font-weight: 600;
 }
 
@@ -119,7 +140,7 @@ a {
   bottom: 10px;
   left: 0;
   border-radius: 0 999px 999px 0;
-  background: var(--mantine-color-indigo-5);
+  background: var(--mantine-color-tangerine-5);
 }
 
 .nav-item .mantine-NavLink-label {
@@ -150,25 +171,25 @@ a {
 .page-heading {
   display: none;
   margin: 0;
-  font-size: 17px;
-  letter-spacing: -0.025em;
+  font-size: 18px;
+  letter-spacing: -0.02em;
 }
 
 .content-shell {
   width: 100%;
   max-width: 1560px;
-  padding: 16px 18px 28px;
+  padding: 16px 16px 24px;
   margin: 0 auto;
 }
 
 .content-intro {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .content-intro h1 {
-  font-size: clamp(26px, 3vw, 34px);
+  font-size: clamp(26px, 3vw, 32px);
   line-height: 1.15;
-  letter-spacing: -0.042em;
+  letter-spacing: -0.03em;
 }
 
 .content-intro p {
@@ -177,17 +198,17 @@ a {
 
 .metric-card {
   min-width: 0;
-  min-height: 86px;
+  min-height: 88px;
   overflow: hidden;
-  border-color: light-dark(#dededc, #2c2d31);
-  background: light-dark(#fafaf9, #18191c);
+  border-color: var(--koliko-border);
+  background: var(--koliko-surface);
   box-shadow: none;
   transition: border-color 120ms ease, background-color 120ms ease;
 }
 
 .metric-card:hover {
-  border-color: light-dark(#c9c9c6, #3b3c42);
-  background: light-dark(#fff, #1b1c20);
+  border-color: var(--koliko-border-strong);
+  background: var(--koliko-surface-raised);
 }
 
 .metric-icon {
@@ -201,10 +222,10 @@ a {
 
 .metric-value {
   overflow: hidden;
-  font-size: clamp(19px, 1.8vw, 23px);
-  font-weight: 735;
+  font-size: clamp(20px, 1.8vw, 23px);
+  font-weight: 700;
   line-height: 1.1;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.03em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -212,18 +233,19 @@ a {
 .panel {
   min-width: 0;
   overflow: hidden;
-  border-color: light-dark(#dededc, #2c2d31);
-  background: light-dark(#fafaf9, #18191c);
+  border-color: var(--koliko-border);
+  background: var(--koliko-surface);
   box-shadow: none;
 }
 
 .panel-header {
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 44px;
+  padding: 0 16px;
 }
 
-.panel-header > p {
-  letter-spacing: -0.012em;
+.panel-title {
+  font-size: 15px;
+  letter-spacing: -0.01em;
 }
 
 .panel-body {
@@ -237,16 +259,16 @@ a {
 
 .panel th {
   color: var(--mantine-color-dimmed);
-  background: light-dark(#f4f4f3, rgba(255, 255, 255, 0.018));
-  font-size: 11px;
-  font-weight: 680;
-  letter-spacing: 0.045em;
+  background: var(--koliko-surface-muted);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .panel td {
-  border-color: light-dark(#e5e5e3, #292a2e);
+  border-color: var(--koliko-border-subtle);
   white-space: nowrap;
 }
 
@@ -267,13 +289,8 @@ a {
   border-bottom: 0;
 }
 
-.chart-panel .panel-header {
-  min-height: 44px;
-  padding-inline: 16px;
-}
-
 .chart-wrap {
-  padding: 12px 16px 14px;
+  padding: 12px 16px 16px;
 }
 
 .activity-chart {
@@ -307,7 +324,7 @@ a {
 
 .empty-state {
   min-height: 132px;
-  padding: 18px;
+  padding: 16px;
 }
 
 .feature-list {
@@ -316,8 +333,8 @@ a {
 
 .feature-row {
   min-height: 48px;
-  padding: 6px 12px;
-  border-bottom: 1px solid light-dark(#e5e5e3, #292a2e);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--koliko-border-subtle);
 }
 
 .feature-row:last-child {
@@ -325,11 +342,11 @@ a {
 }
 
 .session-drawer {
-  background: light-dark(#fbfbfd, #151619);
+  background: var(--koliko-surface-nav);
 }
 
 .session-drawer-header {
-  border-bottom: 1px solid light-dark(#e8eaf0, #292b31);
+  border-bottom: 1px solid var(--koliko-border-subtle);
 }
 
 .event-log {
@@ -348,8 +365,8 @@ a {
 
 .event-row {
   display: grid;
-  grid-template-columns: 15px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 16px;
   position: relative;
   padding: 12px 0;
 }
@@ -363,15 +380,15 @@ a {
   margin-left: 3px;
   border: 2px solid light-dark(#fff, #151619);
   border-radius: 50%;
-  background: var(--mantine-color-indigo-5);
-  box-shadow: 0 0 0 2px light-dark(var(--mantine-color-indigo-1), rgba(99, 102, 241, 0.3));
+  background: var(--mantine-color-tangerine-5);
+  box-shadow: 0 0 0 2px light-dark(var(--mantine-color-tangerine-1), rgba(255, 130, 5, 0.3));
 }
 
 .event-content {
-  padding: 13px 15px;
-  border: 1px solid light-dark(#e8eaf0, #292b31);
+  padding: 12px 16px;
+  border: 1px solid var(--koliko-border-subtle);
   border-radius: var(--mantine-radius-md);
-  background: light-dark(#fff, #1b1c20);
+  background: var(--koliko-surface-raised);
 }
 
 .settings-main {
@@ -380,14 +397,14 @@ a {
 }
 
 .created-key {
-  border-color: light-dark(var(--mantine-color-indigo-2), rgba(99, 102, 241, 0.28));
-  background: light-dark(var(--mantine-color-indigo-0), rgba(99, 102, 241, 0.09));
+  border-color: light-dark(var(--mantine-color-tangerine-2), rgba(255, 130, 5, 0.28));
+  background: light-dark(var(--mantine-color-tangerine-0), rgba(255, 130, 5, 0.09));
 }
 
 .created-key-value {
   min-width: 0;
   overflow: hidden;
-  color: light-dark(var(--mantine-color-indigo-8), var(--mantine-color-indigo-2));
+  color: light-dark(var(--mantine-color-tangerine-8), var(--mantine-color-tangerine-2));
   background: transparent;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -399,8 +416,8 @@ a {
 
 .key-row {
   min-height: 56px;
-  padding: 8px 12px;
-  border-bottom: 1px solid light-dark(#e5e5e3, #292a2e);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--koliko-border-subtle);
 }
 
 .key-row:last-child {
@@ -410,7 +427,7 @@ a {
 .privacy-check,
 .privacy-icon {
   flex: 0 0 auto;
-  color: var(--mantine-color-indigo-5);
+  color: var(--mantine-color-tangerine-5);
 }
 
 .auth-shell {
@@ -418,7 +435,7 @@ a {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: light-dark(#f3f3f2, #111214);
+  background: var(--koliko-bg);
 }
 
 .auth-card {
@@ -427,8 +444,8 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.92fr);
   overflow: hidden;
-  border: 1px solid light-dark(#dededc, #2c2d31);
-  background: light-dark(#fafaf9, #18191c);
+  border: 1px solid var(--koliko-border);
+  background: var(--koliko-surface);
   box-shadow: 0 12px 36px light-dark(rgba(25, 25, 25, 0.08), rgba(0, 0, 0, 0.28));
 }
 
@@ -437,10 +454,10 @@ a {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 34px;
+  padding: 32px;
   overflow: hidden;
-  border-right: 1px solid light-dark(#dededc, #2c2d31);
-  background: light-dark(#f1f1f0, #151619);
+  border-right: 1px solid var(--koliko-border);
+  background: var(--koliko-surface-nav);
 }
 
 .auth-showcase-copy {
@@ -450,17 +467,17 @@ a {
 
 .auth-showcase-copy h1 {
   font-size: clamp(38px, 4.5vw, 52px);
-  line-height: 0.98;
-  letter-spacing: -0.065em;
+  line-height: 1;
+  letter-spacing: -0.05em;
 }
 
 .auth-showcase-copy h1 span {
-  color: var(--mantine-color-indigo-5);
+  color: var(--mantine-color-tangerine-5);
 }
 
 .auth-showcase-copy > p {
-  font-size: 17px;
-  line-height: 1.65;
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.6;
 }
 
 .auth-mini-metrics {
@@ -469,14 +486,14 @@ a {
 }
 
 .auth-mini-card {
-  border: 1px solid light-dark(#dededc, #2c2d31);
-  background: light-dark(#f8f8f7, #1b1c20);
+  border: 1px solid var(--koliko-border);
+  background: var(--koliko-surface-raised);
 }
 
 .auth-form {
   display: grid;
   place-items: center;
-  padding: 36px;
+  padding: 32px;
 }
 
 .auth-form > div {
@@ -485,12 +502,12 @@ a {
 }
 
 .auth-form h2 {
-  font-size: 29px;
-  letter-spacing: -0.04em;
+  font-size: 28px;
+  letter-spacing: -0.03em;
 }
 
 .range-control {
-  background: light-dark(#f1f2f7, #25272c);
+  background: var(--koliko-surface-active);
 }
 
 .mantine-Button-root,
@@ -523,7 +540,7 @@ a {
   }
 
   .app-navbar[data-desktop-collapsed="true"] .navbar-navigation {
-    padding-inline: 7px;
+    padding-inline: 8px;
   }
 
   .app-navbar[data-desktop-collapsed="true"] .nav-item {
@@ -545,7 +562,7 @@ a {
   }
 
   .app-navbar[data-desktop-collapsed="true"] .navbar-footer {
-    padding-inline: 7px;
+    padding-inline: 8px;
   }
 
   .app-navbar[data-desktop-collapsed="true"] .navbar-footer-actions {
@@ -565,7 +582,7 @@ a {
   }
 
   .auth-showcase {
-    padding: 34px;
+    padding: 32px;
   }
 
   .auth-mini-metrics {
@@ -574,8 +591,17 @@ a {
 }
 
 @media (max-width: 48em) {
+  .app-navbar .nav-item,
+  .navbar-footer .mantine-ActionIcon-root {
+    min-height: 44px;
+  }
+
+  .navbar-footer .mantine-ActionIcon-root {
+    min-width: 44px;
+  }
+
   .content-shell {
-    padding: 18px 14px 28px;
+    padding: 16px 16px 24px;
   }
 
   .auth-shell {
@@ -588,10 +614,10 @@ a {
   }
 
   .auth-showcase {
-    min-height: 290px;
-    padding: 26px;
+    min-height: 288px;
+    padding: 24px;
     border-right: 0;
-    border-bottom: 1px solid light-dark(#dededc, #2c2d31);
+    border-bottom: 1px solid var(--koliko-border);
   }
 
   .auth-showcase-copy {
@@ -611,13 +637,19 @@ a {
   }
 
   .auth-form {
-    padding: 32px 28px;
+    padding: 32px 24px;
   }
 }
 
 @media (max-width: 36em) {
   .app-header > div {
     padding-inline: 12px !important;
+  }
+
+  .app-header .mantine-ActionIcon-root,
+  .app-header .mantine-Burger-root {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .range-control {
@@ -629,29 +661,21 @@ a {
   }
 
   .content-intro {
-    margin-bottom: 14px;
-    padding-inline: 3px;
+    margin-bottom: 16px;
   }
 
   .metric-card {
-    min-height: 82px;
-    padding: 10px !important;
+    min-height: 88px;
   }
 
   .metric-value {
     font-size: 20px;
   }
 
-  .panel-header {
-    min-height: 40px;
-    padding-inline: 12px;
-  }
-
-  .chart-panel .panel-header,
+  .panel-header,
   .chart-wrap {
     padding-inline: 12px;
   }
-
 
   .key-create {
     align-items: stretch;
@@ -665,7 +689,7 @@ a {
 
   .auth-showcase {
     min-height: 280px;
-    padding: 23px;
+    padding: 24px;
   }
 
   .auth-showcase-copy h1 {
@@ -673,7 +697,7 @@ a {
   }
 
   .auth-form {
-    padding: 28px 22px;
+    padding: 24px;
   }
 }
 
