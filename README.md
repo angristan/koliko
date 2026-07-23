@@ -38,7 +38,7 @@ Pi lifecycle events
         |
         | HTTPS + bearer ingestion key
         v
-Cloudflare Worker ---- React + Kumo dashboard
+Cloudflare Worker --- React + Mantine dashboard
         |
         v
        D1

@@ -7,7 +7,7 @@ Koliko separates dashboard authentication from telemetry ingestion. Coding-agent
 ```text
 +----------------------+       +-------------------------+
 | Pi collector         |       | Browser                 |
-| lifecycle hooks      |       | React + Kumo dashboard |
+| lifecycle hooks      |       | React + Mantine UI    |
 | 0600 JSONL spool     |       | WebAuthn passkey        |
 +----------+-----------+       +-----------+-------------+
            |                               |            |

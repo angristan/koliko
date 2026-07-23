@@ -1,24 +1,60 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Button } from "@cloudflare/kumo/components/button"
-import { ClipboardText } from "@cloudflare/kumo/components/clipboard-text"
-import { Input } from "@cloudflare/kumo/components/input"
-import { LayerCard } from "@cloudflare/kumo/components/layer-card"
-import { Sidebar } from "@cloudflare/kumo/components/sidebar"
-import { Table } from "@cloudflare/kumo/components/table"
-import { Tabs } from "@cloudflare/kumo/components/tabs"
+import {
+  ActionIcon,
+  Alert,
+  AppShell,
+  Badge,
+  Box,
+  Burger,
+  Button,
+  Card,
+  Center,
+  Code,
+  CopyButton,
+  Divider,
+  Drawer,
+  Group,
+  Loader,
+  NavLink,
+  Paper,
+  PasswordInput,
+  Progress,
+  ScrollArea,
+  SegmentedControl,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+  Tooltip,
+  useComputedColorScheme,
+  useMantineColorScheme
+} from "@mantine/core"
+import { useDisclosure, useMediaQuery } from "@mantine/hooks"
 import {
   ActivityIcon,
   ArrowClockwiseIcon,
+  ArrowRightIcon,
+  ChartLineUpIcon,
   ChatsCircleIcon,
+  CheckCircleIcon,
   CoinsIcon,
+  CopyIcon,
   CurrencyDollarIcon,
   DatabaseIcon,
   GearSixIcon,
   GithubLogoIcon,
   KeyIcon,
   ListBulletsIcon,
+  LockKeyIcon,
+  MoonIcon,
   ShieldCheckIcon,
+  SidebarSimpleIcon,
   SignOutIcon,
+  SparkleIcon,
+  SunIcon,
   TerminalWindowIcon,
   TimerIcon,
   WarningCircleIcon,
@@ -70,62 +106,89 @@ const formatDuration = (milliseconds: number): string => {
 const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`
 
 const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly description: string }>> = {
-  overview: { title: "Overview", description: "Sessions, tokens, runtime, and cost" },
-  features: { title: "Agent features", description: "Tools, reasoning, compaction, goals, and delegation" },
-  sessions: { title: "Sessions", description: "Recent agent activity and event metadata" },
-  settings: { title: "Settings", description: "Collector keys, passkeys, and privacy" }
+  overview: { title: "Overview", description: "See where your agent time, tokens, and spend are going." },
+  features: { title: "Agent features", description: "Understand tools, reasoning, compaction, goals, and delegation." },
+  sessions: { title: "Sessions", description: "Inspect recent runs and their privacy-safe event metadata." },
+  settings: { title: "Settings", description: "Manage collector access, passkeys, and your data boundary." }
 }
 
 function LogoMark() {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M2 11.5 5.5 8l3 2 5.5-6" />
-      <circle cx="2" cy="11.5" r="1" />
-      <circle cx="5.5" cy="8" r="1" />
-      <circle cx="8.5" cy="10" r="1" />
-      <circle cx="14" cy="4" r="1" />
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 17 9 12l4 3 7-9" />
+      <circle cx="4" cy="17" r="1.75" />
+      <circle cx="9" cy="12" r="1.75" />
+      <circle cx="13" cy="15" r="1.75" />
+      <circle cx="20" cy="6" r="1.75" />
     </svg>
   )
 }
 
-const metricVisuals: Readonly<Record<string, { readonly icon: ReactNode; readonly tone: string }>> = {
-  Sessions: { icon: <ChatsCircleIcon />, tone: "blue" },
-  "Agent time": { icon: <TimerIcon />, tone: "purple" },
-  Tokens: { icon: <CoinsIcon />, tone: "orange" },
-  Cost: { icon: <CurrencyDollarIcon />, tone: "green" },
-  "Cache read": { icon: <DatabaseIcon />, tone: "teal" },
-  "Tool success": { icon: <WrenchIcon />, tone: "pink" },
-  "Tool calls": { icon: <WrenchIcon />, tone: "blue" },
-  Compactions: { icon: <DatabaseIcon />, tone: "orange" },
-  "Goal events": { icon: <ActivityIcon />, tone: "green" },
-  "Sub-agent events": { icon: <ChatsCircleIcon />, tone: "purple" }
+function Brand({ compact = false }: { readonly compact?: boolean }) {
+  return (
+    <Group gap="sm" wrap="nowrap" className="brand">
+      <span className="brand-mark"><LogoMark /></span>
+      {!compact && (
+        <Box>
+          <Text fw={750} lh={1.05} className="brand-name">koliko</Text>
+          <Text size="xs" c="dimmed" mt={3}>Agent analytics</Text>
+        </Box>
+      )}
+    </Group>
+  )
 }
 
-function MetricStrip({
+const metricVisuals: Readonly<Record<string, ReactNode>> = {
+  Sessions: <ChatsCircleIcon />,
+  "Agent time": <TimerIcon />,
+  Tokens: <CoinsIcon />,
+  Cost: <CurrencyDollarIcon />,
+  "Cache read": <DatabaseIcon />,
+  "Tool success": <WrenchIcon />,
+  "Tool calls": <WrenchIcon />,
+  Compactions: <DatabaseIcon />,
+  "Goal events": <ActivityIcon />,
+  "Sub-agent events": <ChatsCircleIcon />
+}
+
+function MetricGrid({
   metrics
 }: {
   readonly metrics: ReadonlyArray<{
     readonly label: string
     readonly value: string
     readonly detail?: string
+    readonly progress?: number
   }>
 }) {
   return (
-    <section className="metric-strip" data-count={metrics.length} aria-label="Summary metrics">
-      {metrics.map((metric) => {
-        const visual = metricVisuals[metric.label] ?? { icon: <ActivityIcon />, tone: "blue" }
-        return (
-          <LayerCard className={`metric metric-${visual.tone}`} key={metric.label}>
-            <span className="metric-icon">{visual.icon}</span>
-            <div className="metric-copy">
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-              {metric.detail && <small>{metric.detail}</small>}
-            </div>
-          </LayerCard>
-        )
-      })}
-    </section>
+    <SimpleGrid
+      cols={{ base: 2, sm: 3, lg: metrics.length }}
+      spacing={{ base: "xs", sm: "sm" }}
+      className="metric-grid"
+    >
+      {metrics.map((metric) => (
+        <Card
+          withBorder
+          radius="sm"
+          padding="xs"
+          className="metric-card"
+          key={metric.label}
+        >
+          <Group justify="space-between" align="center" gap={4} wrap="nowrap">
+            <Text size="xs" fw={600} c="dimmed" className="metric-label" truncate>{metric.label}</Text>
+            <ThemeIcon variant="light" color="gray" radius="sm" size={24} className="metric-icon">
+              {metricVisuals[metric.label] ?? <ActivityIcon />}
+            </ThemeIcon>
+          </Group>
+          <Text className="metric-value" mt={6}>{metric.value}</Text>
+          {metric.detail && <Text size="xs" c="dimmed" mt={1} truncate>{metric.detail}</Text>}
+          {metric.progress !== undefined && (
+            <Progress value={Math.max(0, Math.min(100, metric.progress))} color="indigo" size={2} radius="xl" mt={5} />
+          )}
+        </Card>
+      ))}
+    </SimpleGrid>
   )
 }
 
@@ -141,20 +204,21 @@ function Panel({
   readonly className?: string
 }) {
   return (
-    <LayerCard className={`panel ${className}`.trim()}>
-      <LayerCard.Secondary className="panel-header">
-        <h2>{title}</h2>
-        {detail && <span>{detail}</span>}
-      </LayerCard.Secondary>
-      <LayerCard.Primary className="panel-body">{children}</LayerCard.Primary>
-    </LayerCard>
+    <Paper withBorder radius="md" className={`panel ${className}`.trim()}>
+      <Group justify="space-between" gap="sm" className="panel-header">
+        <Text fw={700}>{title}</Text>
+        {detail && <Badge variant="light" color="gray" radius="sm" tt="none">{detail}</Badge>}
+      </Group>
+      <Divider />
+      <Box className="panel-body">{children}</Box>
+    </Paper>
   )
 }
 
 function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) {
-  const width = 840
-  const height = 260
-  const margin = { top: 18, right: 18, bottom: 34, left: 54 }
+  const width = 900
+  const height = 180
+  const margin = { top: 10, right: 14, bottom: 26, left: 50 }
   const chartWidth = width - margin.left - margin.right
   const chartHeight = height - margin.top - margin.bottom
   const rawMax = Math.max(0, ...data.map((day) => day.tokens))
@@ -172,6 +236,7 @@ function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) 
     : `M${points[0]!.x},${margin.top + chartHeight} L${points[0]!.x},${points[0]!.y} ${points.slice(1).map((point) => `L${point.x},${point.y}`).join(" ")} L${points.at(-1)!.x},${margin.top + chartHeight} Z`
   const labelIndexes = new Set([0, ...[0.25, 0.5, 0.75, 1].map((fraction) => Math.round((data.length - 1) * fraction))])
   const total = data.reduce((sum, day) => sum + day.tokens, 0)
+  const cost = data.reduce((sum, day) => sum + day.cost, 0)
   const formatDay = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString("en", {
     month: "short",
     day: "numeric",
@@ -179,73 +244,96 @@ function ActivityChart({ data }: { readonly data: DashboardResponse["daily"] }) 
   })
 
   return (
-    <Panel title="Token usage" detail={`${compactNumber.format(total)} tokens total`} className="chart-panel">
+    <Panel title="Token activity" detail={`${compactNumber.format(total)} tokens · ${money.format(cost)}`} className="chart-panel">
       {data.length === 0 || rawMax === 0 ? (
-        <div className="empty-state">No token usage in this range.</div>
+        <EmptyState icon={<ChartLineUpIcon />} title="No token activity" detail="Usage will appear here after your collector sends its first session." />
       ) : (
-        <div className="chart-wrap">
+        <Box className="chart-wrap">
           <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily token usage line chart">
+            <defs>
+              <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--chart-color)" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="var(--chart-color)" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
             {ticks.map((fraction) => {
               const y = margin.top + chartHeight - chartHeight * fraction
               return (
                 <g key={fraction}>
                   <line x1={margin.left} x2={width - margin.right} y1={y} y2={y} className="chart-grid" />
-                  <text x={margin.left - 10} y={y + 4} textAnchor="end" className="chart-label">
+                  <text x={margin.left - 12} y={y + 4} textAnchor="end" className="chart-label">
                     {compactNumber.format(max * fraction)}
                   </text>
                 </g>
               )
             })}
-            <path d={areaPath} className="chart-area" />
-            <path d={linePath} className="chart-line" />
+            <path d={areaPath} fill="url(#chart-fill)" className="chart-area" />
+            <path d={linePath} pathLength={1} className="chart-line" />
             {points.map(({ day, x, y }, index) => (
-              <g key={day.date} className={index === points.length - 1 ? "chart-point current" : "chart-point"}>
-                <circle cx={x} cy={y} r="3" />
-                <circle cx={x} cy={y} r="10" className="chart-hit-area">
+              <g
+                key={day.date}
+                className={index === points.length - 1 ? "chart-point current" : "chart-point"}
+              >
+                <circle cx={x} cy={y} r="4" />
+                <circle cx={x} cy={y} r="13" className="chart-hit-area">
                   <title>{day.date}: {integer.format(day.tokens)} tokens · {money.format(day.cost)}</title>
                 </circle>
                 {labelIndexes.has(index) && (
-                  <text x={x} y={height - 7} textAnchor={index === 0 ? "start" : index === data.length - 1 ? "end" : "middle"} className="chart-label">
+                  <text x={x} y={height - 8} textAnchor={index === 0 ? "start" : index === data.length - 1 ? "end" : "middle"} className="chart-label">
                     {formatDay(day.date)}
                   </text>
                 )}
               </g>
             ))}
           </svg>
-        </div>
+        </Box>
       )}
     </Panel>
   )
 }
 
+function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonly title: string; readonly detail: string }) {
+  return (
+    <Center className="empty-state">
+      <Stack align="center" gap={7} ta="center">
+        <ThemeIcon size={42} radius="xl" variant="light" color="gray">{icon}</ThemeIcon>
+        <Text size="sm" fw={650}>{title}</Text>
+        <Text size="xs" c="dimmed" maw={360}>{detail}</Text>
+      </Stack>
+    </Center>
+  )
+}
+
 function UsageTable({ rows }: { readonly rows: ReadonlyArray<UsageBreakdown> }) {
-  if (rows.length === 0) return <div className="empty-state compact">No data in this range.</div>
+  if (rows.length === 0) {
+    return <EmptyState icon={<DatabaseIcon />} title="No data yet" detail="There is no usage for this breakdown in the selected range." />
+  }
 
   return (
-    <div className="table-scroll">
-      <Table>
-        <Table.Header>
-          <Table.Row>
-            <Table.Head>Name</Table.Head>
-            <Table.Head>Sessions</Table.Head>
-            <Table.Head>Turns</Table.Head>
-            <Table.Head>Tokens</Table.Head>
-            <Table.Head>Cost</Table.Head>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
+    <Table.ScrollContainer minWidth={430}>
+      <Table verticalSpacing="xs" horizontalSpacing="xs" highlightOnHover>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Name</Table.Th>
+            <Table.Th ta="right">Sessions</Table.Th>
+            <Table.Th ta="right">Turns</Table.Th>
+            <Table.Th ta="right">Tokens</Table.Th>
+            <Table.Th ta="right">Cost</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {rows.slice(0, 10).map((row) => (
-            <Table.Row key={row.key}>
-              <Table.Cell><code>{row.label}</code></Table.Cell>
-              <Table.Cell>{integer.format(row.sessions)}</Table.Cell>
-              <Table.Cell>{integer.format(row.turns)}</Table.Cell>
-              <Table.Cell>{compactNumber.format(row.tokens)}</Table.Cell>
-              <Table.Cell>{money.format(row.cost)}</Table.Cell>
-            </Table.Row>
+            <Table.Tr key={row.key}>
+              <Table.Td><Code>{row.label}</Code></Table.Td>
+              <Table.Td ta="right">{integer.format(row.sessions)}</Table.Td>
+              <Table.Td ta="right">{integer.format(row.turns)}</Table.Td>
+              <Table.Td ta="right">{compactNumber.format(row.tokens)}</Table.Td>
+              <Table.Td ta="right">{money.format(row.cost)}</Table.Td>
+            </Table.Tr>
           ))}
-        </Table.Body>
+        </Table.Tbody>
       </Table>
-    </div>
+    </Table.ScrollContainer>
   )
 }
 
@@ -270,66 +358,113 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
 
   return (
     <main className="auth-shell">
-      <section className="auth-panel">
-        <div className="auth-brand"><span><LogoMark /></span><strong>koliko</strong></div>
-        <div className="auth-copy">
-          <h1>{hasPasskey ? "Sign in" : "Set up Koliko"}</h1>
-          <p>{hasPasskey ? "Authenticate with your passkey to continue." : "Enter the bootstrap token and register your first passkey."}</p>
-        </div>
-        {error && <div className="error-banner"><WarningCircleIcon />{error}</div>}
-        {!hasPasskey && (
-          <Input
-            label="Bootstrap token"
-            type="password"
-            autoComplete="off"
-            value={token}
-            onChange={(event) => setToken(event.currentTarget.value)}
-            placeholder="BOOTSTRAP_TOKEN"
-          />
-        )}
-        <Button
-          variant="primary"
-          loading={busy}
-          disabled={!hasPasskey && token.length === 0}
-          onClick={() => void act()}
-          icon={<ShieldCheckIcon />}
-        >
-          {hasPasskey ? "Continue with passkey" : "Register passkey"}
-        </Button>
-        <p className="auth-note">Prompts, responses, source code, tool arguments, and full paths are never collected.</p>
-      </section>
+      <Paper radius="xl" className="auth-card">
+        <section className="auth-showcase">
+          <Brand />
+          <Stack gap="lg" className="auth-showcase-copy">
+            <Badge variant="light" color="indigo" leftSection={<SparkleIcon size={12} />}>Private by design</Badge>
+            <Title order={1}>Clarity for every<br /><span>agent run.</span></Title>
+            <Text c="dimmed" maw={480}>Understand time, tokens, costs, and workflows without collecting the work itself.</Text>
+          </Stack>
+          <SimpleGrid cols={3} spacing="sm" className="auth-mini-metrics">
+            {[["Prompts", "Never"], ["Source code", "Never"], ["Usage signals", "Only"]].map(([label, value]) => (
+              <Paper key={label} p="md" radius="md" className="auth-mini-card">
+                <Text size="xs" c="dimmed">{label}</Text>
+                <Text fw={700} mt={4}>{value}</Text>
+              </Paper>
+            ))}
+          </SimpleGrid>
+        </section>
+
+        <section className="auth-form">
+          <Stack gap="xl">
+            <Box>
+              <ThemeIcon size={48} radius="md" variant="light" color="indigo" mb="lg">
+                {hasPasskey ? <LockKeyIcon size={24} /> : <ShieldCheckIcon size={24} />}
+              </ThemeIcon>
+              <Title order={2}>{hasPasskey ? "Welcome back" : "Set up your workspace"}</Title>
+              <Text c="dimmed" size="sm" mt={8}>
+                {hasPasskey ? "Use your passkey to securely continue to Koliko." : "Enter your bootstrap token, then register your first passkey."}
+              </Text>
+            </Box>
+
+            {error && <Alert color="red" icon={<WarningCircleIcon />} title="Authentication failed">{error}</Alert>}
+
+            {!hasPasskey && (
+              <PasswordInput
+                label="Bootstrap token"
+                description="Configured in your Worker environment"
+                autoComplete="off"
+                value={token}
+                onChange={(event) => setToken(event.currentTarget.value)}
+                placeholder="BOOTSTRAP_TOKEN"
+                size="md"
+              />
+            )}
+
+            <Button
+              size="md"
+              loading={busy}
+              disabled={!hasPasskey && token.length === 0}
+              onClick={() => void act()}
+              leftSection={<ShieldCheckIcon size={18} />}
+              rightSection={<ArrowRightIcon size={17} />}
+              fullWidth
+            >
+              {hasPasskey ? "Continue with passkey" : "Register passkey"}
+            </Button>
+
+            <Group gap="xs" wrap="nowrap" align="flex-start">
+              <ShieldCheckIcon size={16} className="privacy-icon" />
+              <Text size="xs" c="dimmed">Prompts, responses, source code, tool arguments, and full paths never leave your machine.</Text>
+            </Group>
+          </Stack>
+        </section>
+      </Paper>
     </main>
   )
 }
 
-function SessionDetails({ detail, onClose }: { readonly detail: SessionDetailResponse; readonly onClose: () => void }) {
+function SessionDrawer({ detail, onClose }: { readonly detail: SessionDetailResponse | undefined; readonly onClose: () => void }) {
   return (
-    <Panel
-      title={detail.repository}
-      detail={detail.truncated ? `${detail.events.length} latest events` : `${detail.events.length} events`}
-      className="event-log-panel"
+    <Drawer
+      opened={detail !== undefined}
+      onClose={onClose}
+      position="right"
+      size="lg"
+      title={detail ? (
+        <Box>
+          <Text fw={700}>{detail.repository}</Text>
+          <Text size="xs" c="dimmed">{detail.truncated ? `${detail.events.length} latest events` : `${detail.events.length} events`}</Text>
+        </Box>
+      ) : undefined}
+      classNames={{ content: "session-drawer", header: "session-drawer-header" }}
     >
-      <div className="event-log-actions">
-        <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
-      </div>
-      {detail.truncated && <div className="notice">Showing the latest 500 events.</div>}
-      <div className="event-log">
-        {detail.events.map((event) => (
-          <div className="event-row" key={event.id}>
-            <time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
-            <strong>{event.type.replaceAll("_", " ")}</strong>
-            <div className="event-values">
-              {event.toolName && <code>{event.toolName}</code>}
-              {event.model && <span>{event.provider}/{event.model}</span>}
-              {event.tokens !== undefined && <span>{compactNumber.format(event.tokens)} tokens</span>}
-              {event.cost !== undefined && <span>{money.format(event.cost)}</span>}
-              {event.durationMs !== undefined && <span>{formatDuration(event.durationMs)}</span>}
-              {event.status === "error" && <span className="error-label">error</span>}
-            </div>
-          </div>
+      {detail?.truncated && <Alert color="yellow" mb="md">Showing the latest 500 events.</Alert>}
+      <Stack gap={0} className="event-log">
+        {detail?.events.map((event) => (
+          <Box className="event-row" key={event.id}>
+            <span className="event-dot" />
+            <Box className="event-content">
+              <Group justify="space-between" gap="md" align="flex-start">
+                <Text size="sm" fw={650} tt="capitalize">{event.type.replaceAll("_", " ")}</Text>
+                <Text size="xs" c="dimmed" ff="monospace">
+                  {new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </Text>
+              </Group>
+              <Group gap={7} mt={7}>
+                {event.toolName && <Code>{event.toolName}</Code>}
+                {event.model && <Badge variant="light" color="gray">{event.provider}/{event.model}</Badge>}
+                {event.tokens !== undefined && <Badge variant="light" color="indigo">{compactNumber.format(event.tokens)} tokens</Badge>}
+                {event.cost !== undefined && <Badge variant="light" color="gray">{money.format(event.cost)}</Badge>}
+                {event.durationMs !== undefined && <Badge variant="light" color="gray">{formatDuration(event.durationMs)}</Badge>}
+                {event.status === "error" && <Badge color="red" variant="light">error</Badge>}
+              </Group>
+            </Box>
+          </Box>
         ))}
-      </div>
-    </Panel>
+      </Stack>
+    </Drawer>
   )
 }
 
@@ -362,49 +497,94 @@ function Settings({ onLogout }: { readonly onLogout: () => void }) {
   }
 
   return (
-    <div className="settings-layout">
-      <Panel title="Collector API keys" detail="Ingestion authentication" className="settings-main">
-        <p className="panel-description">Create one revocable key for each coding-agent collector. Only key hashes are stored.</p>
-        {message && <div className="notice">{message}</div>}
-        {createdKey && <ClipboardText text={createdKey} />}
-        <div className="key-create">
-          <Input label="Key name" value={name} onChange={(event) => setName(event.currentTarget.value)} />
-          <Button variant="primary" loading={busy} onClick={() => void create()} icon={<KeyIcon />}>Create key</Button>
-        </div>
-        <div className="key-list">
-          {keys.map((key) => (
-            <div key={key.id} className="key-row">
-              <div>
-                <strong>{key.name}</strong>
-                <small>{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</small>
-              </div>
-              {key.revokedAt
-                ? <span className="muted-label">revoked</span>
-                : <Button variant="secondary-destructive" size="sm" onClick={() => void revokeApiKey(key.id).then(refresh)}>Revoke</Button>}
-            </div>
-          ))}
-          {keys.length === 0 && <div className="empty-state compact">No API keys.</div>}
-        </div>
-      </Panel>
+    <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md" className="settings-grid">
+      <Box className="settings-main">
+        <Panel title="Collector API keys" detail="Ingestion access">
+          <Stack p="md" gap="md">
+            <Box>
+              <Text size="sm" fw={650}>Connect a collector</Text>
+              <Text size="xs" c="dimmed" mt={4}>Create one independently revocable key for each coding-agent collector. Only hashes are stored.</Text>
+            </Box>
 
-      <div className="settings-side">
+            {message && <Alert color={createdKey ? "indigo" : "red"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
+
+            {createdKey && (
+              <Paper withBorder radius="md" p="md" className="created-key">
+                <Group justify="space-between" wrap="nowrap">
+                  <Code className="created-key-value">{createdKey}</Code>
+                  <CopyButton value={createdKey} timeout={1600}>
+                    {({ copied, copy }) => (
+                      <Button variant="light" color={copied ? "teal" : "indigo"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
+                        {copied ? "Copied" : "Copy"}
+                      </Button>
+                    )}
+                  </CopyButton>
+                </Group>
+              </Paper>
+            )}
+
+            <Group align="flex-end" wrap="nowrap" className="key-create">
+              <TextInput label="Key name" value={name} onChange={(event) => setName(event.currentTarget.value)} flex={1} />
+              <Button loading={busy} onClick={() => void create()} leftSection={<KeyIcon />}>Create key</Button>
+            </Group>
+          </Stack>
+
+          <Divider />
+          <Stack gap={0} className="key-list">
+            {keys.map((key) => (
+              <Group key={key.id} justify="space-between" wrap="nowrap" className="key-row">
+                <Group wrap="nowrap" miw={0}>
+                  <ThemeIcon variant="light" color={key.revokedAt ? "gray" : "indigo"} radius="md"><KeyIcon /></ThemeIcon>
+                  <Box miw={0}>
+                    <Group gap="xs">
+                      <Text size="sm" fw={650} truncate>{key.name}</Text>
+                      {key.revokedAt && <Badge size="xs" variant="light" color="gray">Revoked</Badge>}
+                    </Group>
+                    <Text size="xs" c="dimmed" truncate>{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</Text>
+                  </Box>
+                </Group>
+                {!key.revokedAt && (
+                  <Button variant="subtle" color="red" size="compact-sm" onClick={() => void revokeApiKey(key.id).then(refresh)}>Revoke</Button>
+                )}
+              </Group>
+            ))}
+            {keys.length === 0 && <EmptyState icon={<KeyIcon />} title="No collector keys" detail="Create your first key to connect a coding agent." />}
+          </Stack>
+        </Panel>
+      </Box>
+
+      <Stack gap="md" className="settings-side">
         <Panel title="Passkeys">
-          <p className="panel-description">User verification is required for every dashboard sign-in.</p>
-          <div className="button-stack">
-            <Button variant="secondary" onClick={() => void registerPasskey().then(() => setMessage("Passkey added."))} icon={<ShieldCheckIcon />}>Add passkey</Button>
-            <Button variant="ghost" onClick={() => void logout().then(onLogout)} icon={<SignOutIcon />}>Sign out</Button>
-          </div>
+          <Stack p="md" gap="sm">
+            <ThemeIcon size={40} radius="md" variant="light" color="indigo"><ShieldCheckIcon /></ThemeIcon>
+            <Box>
+              <Text size="sm" fw={650}>Passwordless security</Text>
+              <Text size="xs" c="dimmed" mt={4}>User verification is required for every dashboard sign-in.</Text>
+            </Box>
+            <Button variant="light" onClick={() => void registerPasskey().then(() => setMessage("Passkey added."))} leftSection={<ShieldCheckIcon />}>Add passkey</Button>
+            <Button variant="subtle" color="gray" onClick={() => void logout().then(onLogout)} leftSection={<SignOutIcon />}>Sign out</Button>
+          </Stack>
         </Panel>
 
-        <Panel title="Privacy">
-          <dl className="privacy-list">
-            <div><dt>Collected</dt><dd>Usage counts, models, timing, cost, and lifecycle metadata.</dd></div>
-            <div><dt>Excluded</dt><dd>Prompts, responses, source code, arguments, output, and paths.</dd></div>
-            <div><dt>Repository</dt><dd>Folder name only.</dd></div>
-          </dl>
+        <Panel title="Privacy boundary">
+          <Stack p="md" gap="sm">
+            {[
+              ["Collected", "Usage counts, models, timing, cost, and lifecycle metadata."],
+              ["Excluded", "Prompts, responses, code, arguments, output, and paths."],
+              ["Repository", "Folder name only — never a remote or absolute path."]
+            ].map(([label, detail]) => (
+              <Group key={label} align="flex-start" wrap="nowrap">
+                <CheckCircleIcon size={18} className="privacy-check" />
+                <Box>
+                  <Text size="xs" fw={700}>{label}</Text>
+                  <Text size="xs" c="dimmed" mt={2}>{detail}</Text>
+                </Box>
+              </Group>
+            ))}
+          </Stack>
         </Panel>
-      </div>
-    </div>
+      </Stack>
+    </SimpleGrid>
   )
 }
 
@@ -415,121 +595,151 @@ function Overview({ dashboard, cacheRate, toolSuccess }: {
 }) {
   const summary = dashboard?.summary
   return (
-    <>
-      <MetricStrip metrics={[
+    <Stack gap="sm">
+      <MetricGrid metrics={[
         { label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns` },
         { label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime" },
         { label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output` },
         { label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported" },
-        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens` },
-        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls` }
+        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100 },
+        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100 }
       ]} />
       <ActivityChart data={dashboard?.daily ?? []} />
-      <div className="panel-grid two">
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
         <Panel title="Models" detail="By token volume"><UsageTable rows={dashboard?.models ?? []} /></Panel>
         <Panel title="Repositories" detail="Folder names"><UsageTable rows={dashboard?.repositories ?? []} /></Panel>
-      </div>
-    </>
+      </SimpleGrid>
+    </Stack>
   )
 }
 
 function Features({ dashboard, toolSuccess }: { readonly dashboard: DashboardResponse | undefined; readonly toolSuccess: number }) {
   const summary = dashboard?.summary
   return (
-    <>
-      <MetricStrip metrics={[
-        { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful` },
+    <Stack gap="sm">
+      <MetricGrid metrics={[
+        { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful`, progress: toolSuccess * 100 },
         { label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints" },
         { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates" },
         { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work" }
       ]} />
-      <div className="panel-grid two">
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
         <Panel title="Thinking levels" detail="Usage distribution"><UsageTable rows={dashboard?.thinking ?? []} /></Panel>
         <Panel title="Feature events" detail="Lifecycle counts">
-          <div className="feature-list">
+          <Stack gap={0} className="feature-list">
             {dashboard?.features.map((feature) => (
-              <div className="feature-row" key={`${feature.feature}-${feature.label}`}>
-                <span>{feature.feature}</span>
-                <strong>{feature.label.replaceAll("_", " ")}</strong>
-                <small>{feature.detail}</small>
-                <b>{integer.format(feature.count)}</b>
-              </div>
+              <Group justify="space-between" wrap="nowrap" className="feature-row" key={`${feature.feature}-${feature.label}`}>
+                <Group wrap="nowrap" miw={0}>
+                  <ThemeIcon variant="light" color="gray" radius="md"><SparkleIcon /></ThemeIcon>
+                  <Box miw={0}>
+                    <Text size="sm" fw={650} tt="capitalize" truncate>{feature.label.replaceAll("_", " ")}</Text>
+                    <Text size="xs" c="dimmed" truncate>{feature.feature} · {feature.detail}</Text>
+                  </Box>
+                </Group>
+                <Badge variant="light" color="gray">{integer.format(feature.count)}</Badge>
+              </Group>
             ))}
-            {(dashboard?.features.length ?? 0) === 0 && <div className="empty-state compact">No feature events.</div>}
-          </div>
+            {(dashboard?.features.length ?? 0) === 0 && <EmptyState icon={<SparkleIcon />} title="No feature events" detail="Feature lifecycle events will appear here as agents use them." />}
+          </Stack>
         </Panel>
-      </div>
+      </SimpleGrid>
       <Panel title="Tool performance" detail="Top 50 tools">
-        <div className="table-scroll">
-          <Table>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Tool</Table.Head>
-                <Table.Head>Calls</Table.Head>
-                <Table.Head>Errors</Table.Head>
-                <Table.Head>Total time</Table.Head>
-                <Table.Head>Success rate</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {dashboard?.tools.map((tool) => (
-                <Table.Row key={tool.name}>
-                  <Table.Cell><code>{tool.name}</code></Table.Cell>
-                  <Table.Cell>{integer.format(tool.calls)}</Table.Cell>
-                  <Table.Cell>{integer.format(tool.errors)}</Table.Cell>
-                  <Table.Cell>{formatDuration(tool.durationMs)}</Table.Cell>
-                  <Table.Cell>{formatPercent(tool.calls === 0 ? 1 : 1 - tool.errors / tool.calls)}</Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </div>
+        {(dashboard?.tools.length ?? 0) === 0 ? (
+          <EmptyState icon={<WrenchIcon />} title="No tool calls" detail="Tool performance will appear after a session uses tools." />
+        ) : (
+          <Table.ScrollContainer minWidth={680}>
+            <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Tool</Table.Th>
+                  <Table.Th ta="right">Calls</Table.Th>
+                  <Table.Th ta="right">Errors</Table.Th>
+                  <Table.Th ta="right">Total time</Table.Th>
+                  <Table.Th ta="right">Success rate</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {dashboard?.tools.map((tool) => {
+                  const success = tool.calls === 0 ? 1 : 1 - tool.errors / tool.calls
+                  return (
+                    <Table.Tr key={tool.name}>
+                      <Table.Td><Code>{tool.name}</Code></Table.Td>
+                      <Table.Td ta="right">{integer.format(tool.calls)}</Table.Td>
+                      <Table.Td ta="right"><Text span c={tool.errors > 0 ? "red" : undefined}>{integer.format(tool.errors)}</Text></Table.Td>
+                      <Table.Td ta="right">{formatDuration(tool.durationMs)}</Table.Td>
+                      <Table.Td ta="right">
+                        <Group gap="sm" justify="flex-end" wrap="nowrap">
+                          <Progress value={success * 100} color={success > 0.95 ? "teal" : "orange"} w={64} size={5} />
+                          <Text size="sm" w={45}>{formatPercent(success)}</Text>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
       </Panel>
-    </>
+    </Stack>
   )
 }
 
-function Sessions({ dashboard, session, setSession }: {
+function Sessions({ dashboard, setSession }: {
   readonly dashboard: DashboardResponse | undefined
-  readonly session: SessionDetailResponse | undefined
   readonly setSession: (session: SessionDetailResponse | undefined) => void
 }) {
   return (
-    <>
-      <Panel title="Recent sessions" detail="Latest 50">
-        <div className="table-scroll">
-          <Table>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Repository</Table.Head>
-                <Table.Head>Last activity</Table.Head>
-                <Table.Head>Model</Table.Head>
-                <Table.Head>Turns</Table.Head>
-                <Table.Head>Tokens</Table.Head>
-                <Table.Head>Cost</Table.Head>
-                <Table.Head />
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
+    <Panel title="Recent sessions" detail="Latest 50">
+      {(dashboard?.sessions.length ?? 0) === 0 ? (
+        <EmptyState icon={<ListBulletsIcon />} title="No sessions yet" detail="Recent agent sessions will show up here once data arrives." />
+      ) : (
+        <Table.ScrollContainer minWidth={820}>
+          <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Repository</Table.Th>
+                <Table.Th>Last activity</Table.Th>
+                <Table.Th>Model</Table.Th>
+                <Table.Th ta="right">Turns</Table.Th>
+                <Table.Th ta="right">Tokens</Table.Th>
+                <Table.Th ta="right">Cost</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {dashboard?.sessions.map((row) => (
-                <Table.Row key={row.id}>
-                  <Table.Cell><strong>{row.repository}</strong></Table.Cell>
-                  <Table.Cell>{new Date(row.endedAt).toLocaleString()}</Table.Cell>
-                  <Table.Cell><code>{row.model}</code></Table.Cell>
-                  <Table.Cell>{integer.format(row.turns)}</Table.Cell>
-                  <Table.Cell>{compactNumber.format(row.tokens)}</Table.Cell>
-                  <Table.Cell>{money.format(row.cost)}</Table.Cell>
-                  <Table.Cell><Button size="sm" variant="ghost" onClick={() => void getSession(row.id).then(setSession)}>Inspect</Button></Table.Cell>
-                </Table.Row>
+                <Table.Tr key={row.id}>
+                  <Table.Td>
+                    <Group gap="sm" wrap="nowrap">
+                      <ThemeIcon size="sm" variant="light" color="indigo" radius="sm"><TerminalWindowIcon /></ThemeIcon>
+                      <Text size="sm" fw={650}>{row.repository}</Text>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td><Text size="sm" c="dimmed">{new Date(row.endedAt).toLocaleString()}</Text></Table.Td>
+                  <Table.Td><Code>{row.model}</Code></Table.Td>
+                  <Table.Td ta="right">{integer.format(row.turns)}</Table.Td>
+                  <Table.Td ta="right">{compactNumber.format(row.tokens)}</Table.Td>
+                  <Table.Td ta="right">{money.format(row.cost)}</Table.Td>
+                  <Table.Td ta="right">
+                    <Button size="compact-sm" variant="subtle" rightSection={<ArrowRightIcon />} onClick={() => void getSession(row.id).then(setSession)}>Inspect</Button>
+                  </Table.Td>
+                </Table.Tr>
               ))}
-            </Table.Body>
+            </Table.Tbody>
           </Table>
-        </div>
-      </Panel>
-      {session && <SessionDetails detail={session} onClose={() => setSession(undefined)} />}
-    </>
+        </Table.ScrollContainer>
+      )}
+    </Panel>
   )
 }
+
+const navigation: ReadonlyArray<{ readonly tab: Tab; readonly label: string; readonly icon: typeof ActivityIcon }> = [
+  { tab: "overview", label: "Overview", icon: ActivityIcon },
+  { tab: "features", label: "Agent features", icon: TerminalWindowIcon },
+  { tab: "sessions", label: "Sessions", icon: ListBulletsIcon },
+  { tab: "settings", label: "Settings", icon: GearSixIcon }
+]
 
 export default function App() {
   const [auth, setAuth] = useState<{
@@ -543,6 +753,11 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   const [session, setSession] = useState<SessionDetailResponse>()
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false)
+  const [mobileOpened, mobileNavigation] = useDisclosure(false)
+  const isDesktop = useMediaQuery("(min-width: 48em)")
+  const computedColorScheme = useComputedColorScheme("light")
+  const { toggleColorScheme } = useMantineColorScheme()
 
   const range = useMemo(() => rangeForDays(days), [days])
   const refreshAuth = useCallback(async () => {
@@ -565,7 +780,9 @@ export default function App() {
   useEffect(() => { void refreshAuth() }, [refreshAuth])
   useEffect(() => { if (auth.authenticated) void refreshDashboard() }, [auth.authenticated, refreshDashboard])
 
-  if (auth.loading) return <main className="auth-shell"><span className="loading-label">Loading Koliko…</span></main>
+  if (auth.loading) {
+    return <Center mih="100vh"><Stack align="center" gap="sm"><Loader type="dots" /><Text size="sm" c="dimmed">Loading Koliko</Text></Stack></Center>
+  }
   if (!auth.authenticated) return <Login hasPasskey={auth.hasPasskey} onAuthenticated={() => void refreshAuth()} />
 
   const summary = dashboard?.summary
@@ -576,60 +793,129 @@ export default function App() {
     : 1 - (summary?.toolErrors ?? 0) / (summary?.toolCalls ?? 1)
   const page = pageTitles[tab]
 
+  const navigate = (next: Tab) => {
+    setTab(next)
+    mobileNavigation.close()
+  }
+
   return (
-    <Sidebar.Provider defaultOpen collapsible="icon" mobileBreakpoint={620} className="app-shell">
-      <Sidebar className="app-sidebar">
-        <Sidebar.Header className="app-sidebar-header">
-          <div className="wordmark"><span><LogoMark /></span><strong>koliko</strong></div>
-        </Sidebar.Header>
-        <Sidebar.Content>
-          <Sidebar.Group>
-            <Sidebar.Menu>
-              <Sidebar.MenuButton icon={ActivityIcon} active={tab === "overview"} tooltip="Overview" onClick={() => setTab("overview")}>Overview</Sidebar.MenuButton>
-              <Sidebar.MenuButton icon={TerminalWindowIcon} active={tab === "features"} tooltip="Agent features" onClick={() => setTab("features")}>Agent features</Sidebar.MenuButton>
-              <Sidebar.MenuButton icon={ListBulletsIcon} active={tab === "sessions"} tooltip="Sessions" onClick={() => setTab("sessions")}>Sessions</Sidebar.MenuButton>
-              <Sidebar.MenuButton icon={GearSixIcon} active={tab === "settings"} tooltip="Settings" onClick={() => setTab("settings")}>Settings</Sidebar.MenuButton>
-            </Sidebar.Menu>
-          </Sidebar.Group>
-        </Sidebar.Content>
-        <Sidebar.Footer className="app-sidebar-footer">
-          <Sidebar.Menu>
-            <Sidebar.MenuButton icon={GithubLogoIcon} href="https://github.com/angristan/koliko" tooltip="GitHub">GitHub</Sidebar.MenuButton>
-          </Sidebar.Menu>
-          <Sidebar.Trigger />
-        </Sidebar.Footer>
-      </Sidebar>
+    <AppShell
+      layout="alt"
+      header={{ height: 58 }}
+      navbar={{ width: isDesktop && desktopCollapsed ? 56 : 208, breakpoint: "sm", collapsed: { mobile: !mobileOpened } }}
+      padding={0}
+      className="app-shell"
+    >
+      <AppShell.Header className="app-header">
+        <Group h="100%" px={{ base: "md", sm: "lg" }} justify="space-between" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap">
+            <Burger
+              opened={mobileOpened}
+              onClick={mobileNavigation.toggle}
+              hiddenFrom="sm"
+              size="sm"
+              aria-label={mobileOpened ? "Close navigation" : "Open navigation"}
+            />
+            <Box hiddenFrom="sm"><Brand compact /></Box>
+            <Title order={2} className="page-heading">{page.title}</Title>
+          </Group>
 
-      <div className="workspace">
-        <header className="page-header">
-          <div className="page-heading">
-            <Sidebar.Trigger className="header-sidebar-trigger" />
-            <div><h1>{page.title}</h1><p>{page.description}</p></div>
-          </div>
-          {tab !== "settings" && (
-            <div className="header-controls">
-              <Tabs
-                variant="segmented"
-                size="sm"
-                tabs={[7, 30, 90].map((value) => ({ value: String(value), label: `${value}d` }))}
-                value={String(days)}
-                onValueChange={(value) => setDays(Number(value))}
-              />
-              <Button shape="square" size="sm" variant="secondary" aria-label="Refresh dashboard" loading={loading} onClick={() => void refreshDashboard()}>
-                <ArrowClockwiseIcon />
-              </Button>
-            </div>
-          )}
-        </header>
+          <Group gap="sm" wrap="nowrap">
+            {tab !== "settings" && (
+              <>
+                <SegmentedControl
+                  size="xs"
+                  value={String(days)}
+                  onChange={(value) => setDays(Number(value))}
+                  data={[7, 30, 90].map((value) => ({ value: String(value), label: `${value}d` }))}
+                  className="range-control"
+                />
+                <Tooltip label="Refresh dashboard">
+                  <ActionIcon variant="default" size="lg" aria-label="Refresh dashboard" loading={loading} onClick={() => void refreshDashboard()}>
+                    <ArrowClockwiseIcon />
+                  </ActionIcon>
+                </Tooltip>
+              </>
+            )}
+            <Tooltip label={computedColorScheme === "dark" ? "Use light theme" : "Use dark theme"}>
+              <ActionIcon variant="default" size="lg" aria-label="Toggle color theme" onClick={toggleColorScheme}>
+                {computedColorScheme === "dark" ? <SunIcon /> : <MoonIcon />}
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </Group>
+      </AppShell.Header>
 
-        <main className="content">
-          {error && <div className="error-banner"><WarningCircleIcon />{error}</div>}
-          {tab === "overview" && <Overview dashboard={dashboard} cacheRate={cacheRate} toolSuccess={toolSuccess} />}
-          {tab === "features" && <Features dashboard={dashboard} toolSuccess={toolSuccess} />}
-          {tab === "sessions" && <Sessions dashboard={dashboard} session={session} setSession={setSession} />}
-          {tab === "settings" && <Settings onLogout={() => setAuth({ loading: false, authenticated: false, hasPasskey: true })} />}
-        </main>
-      </div>
-    </Sidebar.Provider>
+      <AppShell.Navbar p={0} className="app-navbar" data-desktop-collapsed={desktopCollapsed}>
+        <AppShell.Section className="navbar-brand"><Brand /></AppShell.Section>
+        <AppShell.Section grow component={ScrollArea} className="navbar-navigation">
+          <Stack gap={2}>
+            {navigation.map((item) => (
+              <Tooltip key={item.tab} label={item.label} position="right" disabled={!desktopCollapsed}>
+                <NavLink
+                  label={item.label}
+                  aria-label={item.label}
+                  leftSection={<item.icon size={19} />}
+                  active={tab === item.tab}
+                  onClick={() => navigate(item.tab)}
+                  variant="light"
+                  className="nav-item"
+                />
+              </Tooltip>
+            ))}
+          </Stack>
+        </AppShell.Section>
+        <AppShell.Section className="navbar-footer">
+          <Group gap={4} justify="space-between" className="navbar-footer-actions">
+            <Tooltip label="View on GitHub" position="right">
+              <ActionIcon
+                component="a"
+                href="https://github.com/angristan/koliko"
+                target="_blank"
+                rel="noreferrer"
+                variant="subtle"
+                color="gray"
+                size="lg"
+                aria-label="View on GitHub"
+              >
+                <GithubLogoIcon size={19} />
+              </ActionIcon>
+            </Tooltip>
+            <Box visibleFrom="sm">
+              <Tooltip label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="right">
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="lg"
+                  aria-label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  onClick={() => setDesktopCollapsed((collapsed) => !collapsed)}
+                >
+                  <SidebarSimpleIcon size={19} />
+                </ActionIcon>
+              </Tooltip>
+            </Box>
+          </Group>
+        </AppShell.Section>
+      </AppShell.Navbar>
+
+      <AppShell.Main>
+        <Box className="content-shell">
+          <Box className="content-intro">
+            <Title order={1}>{page.title}</Title>
+            <Text c="dimmed" mt={6}>{page.description}</Text>
+          </Box>
+
+          {error && <Alert color="red" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{error}</Alert>}
+          <Box key={tab} className="page-content">
+            {tab === "overview" && <Overview dashboard={dashboard} cacheRate={cacheRate} toolSuccess={toolSuccess} />}
+            {tab === "features" && <Features dashboard={dashboard} toolSuccess={toolSuccess} />}
+            {tab === "sessions" && <Sessions dashboard={dashboard} setSession={setSession} />}
+            {tab === "settings" && <Settings onLogout={() => setAuth({ loading: false, authenticated: false, hasPasskey: true })} />}
+          </Box>
+        </Box>
+      </AppShell.Main>
+
+      <SessionDrawer detail={session} onClose={() => setSession(undefined)} />
+    </AppShell>
   )
 }

@@ -37,7 +37,8 @@
     ]
   },
   "dependencies": {
-    "@cloudflare/kumo": "2.8.0",
+    "@mantine/core": "^9.4.2",
+    "@mantine/hooks": "^9.4.2",
     "@phosphor-icons/react": "^2.1.10",
     "@simplewebauthn/browser": "13.3.0",
     "@simplewebauthn/server": "13.3.0",
