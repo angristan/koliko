@@ -1,6 +1,6 @@
 # Architecture
 
-Traker separates dashboard authentication from telemetry ingestion. Coding-agent collectors never receive a dashboard session, and browsers never need an ingestion key.
+Koliko separates dashboard authentication from telemetry ingestion. Coding-agent collectors never receive a dashboard session, and browsers never need an ingestion key.
 
 ## Components
 

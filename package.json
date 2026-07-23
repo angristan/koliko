@@ -1,5 +1,5 @@
 {
-  "name": "traker",
+  "name": "koliko",
   "version": "0.1.0",
   "private": true,
   "packageManager": "bun@1.3.9",
@@ -8,15 +8,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/angristan/traker.git"
+    "url": "git+ssh://git@github.com/angristan/koliko.git"
   },
   "bugs": {
-    "url": "https://github.com/angristan/traker/issues"
+    "url": "https://github.com/angristan/koliko/issues"
   },
   "keywords": ["pi-package", "analytics", "cloudflare", "coding-agent"],
   "scripts": {
     "build": "vite build",
-    "build:production": "TRAKER_WRANGLER_CONFIG=wrangler.production.jsonc vite build",
+    "build:production": "KOLIKO_WRANGLER_CONFIG=wrangler.production.jsonc vite build",
     "verify": "bun run cf:typecheck && bun run typecheck && bun run test && bun run build && wrangler deploy --dry-run",
     "dev": "vite --host localhost --port 8787 --strictPort",
     "typecheck": "tsc --noEmit",
@@ -26,10 +26,10 @@
     "cf:typecheck": "wrangler types --env-file .dev.vars.example --check",
     "prepare:production-config": "bun scripts/prepare-production-config.ts",
     "smoke:production": "bun scripts/smoke-production.ts",
-    "db:migrate:local": "wrangler d1 migrations apply traker --local",
-    "db:migrate:remote": "bun run prepare:production-config && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc",
+    "db:migrate:local": "wrangler d1 migrations apply koliko --local",
+    "db:migrate:remote": "bun run prepare:production-config && wrangler d1 migrations apply koliko --remote --config wrangler.production.jsonc",
     "deploy:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run",
-    "deploy": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply traker --remote --config wrangler.production.jsonc && wrangler deploy && bun run smoke:production"
+    "deploy": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply koliko --remote --config wrangler.production.jsonc && wrangler deploy && bun run smoke:production"
   },
   "pi": {
     "extensions": [

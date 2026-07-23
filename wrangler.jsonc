@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "traker",
+  "name": "koliko",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-07-22",
   "compatibility_flags": ["nodejs_compat"],
@@ -15,13 +15,13 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "traker",
+      "database_name": "koliko",
       "database_id": "replace-with-your-d1-database-id",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
-    "RP_NAME": "Traker",
+    "RP_NAME": "Koliko",
     "RP_ID": "localhost",
     "EXPECTED_ORIGIN": "http://localhost:8787"
   },

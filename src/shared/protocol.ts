@@ -79,7 +79,7 @@ export class TelemetryEvent extends Schema.Class<TelemetryEvent>("TelemetryEvent
 }) {}
 
 export class IngestBatch extends Schema.Class<IngestBatch>("IngestBatch")({
-  clientName: Schema.Literal("traker-pi-extension"),
+  clientName: Schema.Literal("koliko-pi-extension"),
   clientVersion: Schema.String.check(Schema.isLengthBetween(1, 64)),
   events: Schema.Array(TelemetryEvent).check(Schema.isLengthBetween(1, 100))
 }) {}

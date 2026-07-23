@@ -22,7 +22,7 @@ export default defineConfig({
               compatibilityFlags: ["nodejs_compat"],
               d1Databases: ["DB"],
               bindings: {
-                RP_NAME: "Traker",
+                RP_NAME: "Koliko",
                 RP_ID: "example.test",
                 EXPECTED_ORIGIN: "https://example.test",
                 BOOTSTRAP_TOKEN: "test-bootstrap-token-with-sufficient-entropy",

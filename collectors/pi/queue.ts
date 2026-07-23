@@ -79,18 +79,18 @@ export class TelemetryQueue {
           "content-type": "application/json"
         },
         body: JSON.stringify(IngestBatch.make({
-          clientName: "traker-pi-extension",
+          clientName: "koliko-pi-extension",
           clientVersion: CLIENT_VERSION,
           events: batch
         }))
       })
 
       if (!response.ok) {
-        throw new Error(`Traker ingest returned HTTP ${response.status}`)
+        throw new Error(`Koliko ingest returned HTTP ${response.status}`)
       }
       const acknowledgement = await Schema.decodeUnknownPromise(IngestAccepted)(await response.json())
       if (acknowledgement.accepted !== batch.length) {
-        throw new Error(`Traker acknowledged ${acknowledgement.accepted} of ${batch.length} events`)
+        throw new Error(`Koliko acknowledged ${acknowledgement.accepted} of ${batch.length} events`)
       }
 
       const deliveredIds = new Set(batch.map((event) => event.id))

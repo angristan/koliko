@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "traker",
+  "name": "koliko",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-07-22",
   "compatibility_flags": ["nodejs_compat"],
@@ -16,22 +16,22 @@
   "preview_urls": false,
   "routes": [
     {
-      "pattern": "traker.example.com",
+      "pattern": "koliko.example.com",
       "custom_domain": true
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "traker",
+      "database_name": "koliko",
       "database_id": "replace-with-your-d1-database-id",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
-    "RP_NAME": "Traker",
-    "RP_ID": "traker.example.com",
-    "EXPECTED_ORIGIN": "https://traker.example.com"
+    "RP_NAME": "Koliko",
+    "RP_ID": "koliko.example.com",
+    "EXPECTED_ORIGIN": "https://koliko.example.com"
   },
   "observability": {
     "enabled": true,

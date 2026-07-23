@@ -1,6 +1,6 @@
 # Self-hosting and operations
 
-Traker runs as one Cloudflare Worker with Static Assets and one D1 database.
+Koliko runs as one Cloudflare Worker with Static Assets and one D1 database.
 
 ## Prerequisites
 
@@ -15,8 +15,8 @@ Choose the hostname before registering a passkey. WebAuthn credentials are bound
 ## 1. Clone and install
 
 ```bash
-git clone git@github.com:angristan/traker.git
-cd traker
+git clone git@github.com:angristan/koliko.git
+cd koliko
 bun install
 cp wrangler.production.jsonc.example wrangler.production.jsonc
 bunx wrangler whoami
@@ -27,7 +27,7 @@ Review the account shown by Wrangler before creating resources.
 ## 2. Create D1
 
 ```bash
-bunx wrangler d1 create traker
+bunx wrangler d1 create koliko
 ```
 
 Copy the returned database ID into the `DB` binding in the ignored `wrangler.production.jsonc` file:
@@ -36,7 +36,7 @@ Copy the returned database ID into the `DB` binding in the ignored `wrangler.pro
 "d1_databases": [
   {
     "binding": "DB",
-    "database_name": "traker",
+    "database_name": "koliko",
     "database_id": "your-database-id",
     "migrations_dir": "migrations"
   }
@@ -56,14 +56,14 @@ For a custom domain:
 "preview_urls": false,
 "routes": [
   {
-    "pattern": "traker.example.com",
+    "pattern": "koliko.example.com",
     "custom_domain": true
   }
 ],
 "vars": {
-  "RP_NAME": "Traker",
-  "RP_ID": "traker.example.com",
-  "EXPECTED_ORIGIN": "https://traker.example.com"
+  "RP_NAME": "Koliko",
+  "RP_ID": "koliko.example.com",
+  "EXPECTED_ORIGIN": "https://koliko.example.com"
 }
 ```
 
@@ -84,7 +84,7 @@ Keep `assets.run_worker_first` set to `["/api/*"]`. Static files and SPA routes 
 
 Keep `placement.mode` set to `smart` so Cloudflare can place the D1-backed API execution based on measured request duration. After deployment, allow time and traffic for analysis, then compare request-duration percentiles and inspect `placement_status`. Disable Smart Placement if it reports `UNSUPPORTED_APPLICATION` or measured API latency regresses.
 
-The production template explicitly persists Workers Logs and Traces at full sampling. Automatic platform spans cover API requests and D1 calls; Traker adds one bounded custom span around passkey verification, telemetry ingestion, dashboard loading, and ingestion-key creation. Span attributes contain only a failure boolean and bounded failure category, and unexpected logs include only the error class.
+The production template explicitly persists Workers Logs and Traces at full sampling. Automatic platform spans cover API requests and D1 calls; Koliko adds one bounded custom span around passkey verification, telemetry ingestion, dashboard loading, and ingestion-key creation. Span attributes contain only a failure boolean and bounded failure category, and unexpected logs include only the error class.
 
 Observability event volume scales approximately with requests plus captured spans and logs. Review Cloudflare usage before a high-traffic deployment. To stop trace ingestion quickly, set `observability.traces.enabled` to `false` and redeploy; choose a lower sampling rate only from measured traffic and retention requirements.
 
@@ -129,8 +129,8 @@ Store the bootstrap token securely for disaster recovery. It becomes useful agai
 ### Service and TLS
 
 ```bash
-curl -fsS https://traker.example.com/api/auth/status
-curl -fsSI https://traker.example.com/
+curl -fsS https://koliko.example.com/api/auth/status
+curl -fsSI https://koliko.example.com/
 ```
 
 A healthy unauthenticated status response looks like:
@@ -150,13 +150,13 @@ Confirm the HTML response includes:
 ### Migrations
 
 ```bash
-bunx wrangler d1 migrations list traker --remote --config wrangler.production.jsonc
+bunx wrangler d1 migrations list koliko --remote --config wrangler.production.jsonc
 ```
 
 ### Logs
 
 ```bash
-bunx wrangler tail traker --config wrangler.production.jsonc
+bunx wrangler tail koliko --config wrangler.production.jsonc
 ```
 
 The Worker logs unexpected failures using bounded error classes. It does not intentionally log request bodies, ingestion keys, repository labels, session IDs, or raw errors. Workers Traces adds privacy-safe business spans for the main authenticated and ingestion operations.
@@ -166,7 +166,7 @@ The Worker logs unexpected failures using bounded error classes. It does not int
 Use narrow queries and avoid exporting telemetry unless necessary:
 
 ```bash
-bunx wrangler d1 execute traker --remote --config wrangler.production.jsonc \
+bunx wrangler d1 execute koliko --remote --config wrangler.production.jsonc \
   --command "SELECT event_type, COUNT(*) AS count FROM telemetry_events GROUP BY event_type"
 ```
 
@@ -175,7 +175,7 @@ bunx wrangler d1 execute traker --remote --config wrangler.production.jsonc \
 Keep `wrangler.production.jsonc` ignored. Workers Builds can reconstruct it from a secret build variable:
 
 1. Base64-encode the complete production config without printing it to logs.
-2. Create a secret build variable named `TRAKER_WRANGLER_CONFIG_B64` on the production trigger.
+2. Create a secret build variable named `KOLIKO_WRANGLER_CONFIG_B64` on the production trigger.
 3. Limit the trigger to `main`; do not create a preview trigger backed by the production D1 database.
 4. Leave the separate build command empty and use `bun run deploy` as the deploy command.
 5. Enable build caching and pin the desired Bun version with a non-secret `BUN_VERSION` build variable when needed.
@@ -226,7 +226,7 @@ A Time Travel restore replaces database state and can discard telemetry received
 
 1. Create a new key in dashboard **Settings**.
 2. Update the collector's private config.
-3. Start or reload Pi and run `/traker-flush`.
+3. Start or reload Pi and run `/koliko-flush`.
 4. Confirm the new key has a recent last-used timestamp.
 5. Revoke the old key.
 
@@ -248,13 +248,13 @@ This does not affect existing passkeys or sessions. The token is ignored for pas
 
 ## Backup, retention, and deletion
 
-Traker does not implement automatic telemetry retention. Define an operator policy appropriate for your deployment.
+Koliko does not implement automatic telemetry retention. Define an operator policy appropriate for your deployment.
 
 Export D1 only when required because exports contain repository labels and usage metadata:
 
 ```bash
-bunx wrangler d1 export traker --remote --config wrangler.production.jsonc --output=traker-backup.sql
-chmod 600 traker-backup.sql
+bunx wrangler d1 export koliko --remote --config wrangler.production.jsonc --output=koliko-backup.sql
+chmod 600 koliko-backup.sql
 ```
 
 Cloudflare Time Travel availability and retention depend on the Workers plan. Review current D1 documentation before treating it as a backup strategy.
@@ -277,4 +277,4 @@ Check remote migration state and Worker logs. The deployed code and D1 schema mu
 
 ### Collector receives `401`
 
-The dashboard passkey is unrelated to ingestion. Confirm the collector uses an active `trk_...` key created in **Settings**.
+The dashboard passkey is unrelated to ingestion. Confirm the collector uses an active `klk_...` key created in **Settings**.

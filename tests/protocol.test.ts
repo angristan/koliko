@@ -10,7 +10,7 @@ const validEvent = {
   sequence: 1,
   occurredAt: "2026-07-21T12:00:00.000Z",
   type: "usage",
-  repository: "traker",
+  repository: "koliko",
   model: "claude-sonnet",
   totalTokens: 1200,
   attributes: { source: "assistant" }
@@ -19,7 +19,7 @@ const validEvent = {
 describe("telemetry protocol", () => {
   it.effect("decodes a valid batch and strips unmodeled content", () => Effect.gen(function*() {
     const batch = yield* Schema.decodeUnknownEffect(IngestBatch)({
-      clientName: "traker-pi-extension",
+      clientName: "koliko-pi-extension",
       clientVersion: "0.1.0",
       events: [{ ...validEvent, prompt: "must never cross the boundary" }]
     })
@@ -31,7 +31,7 @@ describe("telemetry protocol", () => {
 
   it.effect("rejects unsupported schema versions", () => Effect.gen(function*() {
     const exit = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
-      clientName: "traker-pi-extension",
+      clientName: "koliko-pi-extension",
       clientVersion: "0.1.0",
       events: [{ ...validEvent, schemaVersion: 2 }]
     }))
@@ -48,7 +48,7 @@ describe("telemetry protocol", () => {
       { ...validEvent, costTotal: Number.POSITIVE_INFINITY }
     ]) {
       const exit = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
-        clientName: "traker-pi-extension",
+        clientName: "koliko-pi-extension",
         clientVersion: "0.1.0",
         events: [invalidEvent]
       }))
@@ -58,12 +58,12 @@ describe("telemetry protocol", () => {
 
   it.effect("requires a bounded non-empty batch", () => Effect.gen(function*() {
     const empty = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
-      clientName: "traker-pi-extension",
+      clientName: "koliko-pi-extension",
       clientVersion: "0.1.0",
       events: []
     }))
     const oversized = yield* Effect.exit(Schema.decodeUnknownEffect(IngestBatch)({
-      clientName: "traker-pi-extension",
+      clientName: "koliko-pi-extension",
       clientVersion: "0.1.0",
       events: Array.from({ length: 101 }, (_, index) => ({ ...validEvent, id: `evt_${index}` }))
     }))

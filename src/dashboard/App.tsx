@@ -271,9 +271,9 @@ function Login({ hasPasskey, onAuthenticated }: { readonly hasPasskey: boolean; 
   return (
     <main className="auth-shell">
       <section className="auth-panel">
-        <div className="auth-brand"><span><LogoMark /></span><strong>traker</strong></div>
+        <div className="auth-brand"><span><LogoMark /></span><strong>koliko</strong></div>
         <div className="auth-copy">
-          <h1>{hasPasskey ? "Sign in" : "Set up Traker"}</h1>
+          <h1>{hasPasskey ? "Sign in" : "Set up Koliko"}</h1>
           <p>{hasPasskey ? "Authenticate with your passkey to continue." : "Enter the bootstrap token and register your first passkey."}</p>
         </div>
         {error && <div className="error-banner"><WarningCircleIcon />{error}</div>}
@@ -565,7 +565,7 @@ export default function App() {
   useEffect(() => { void refreshAuth() }, [refreshAuth])
   useEffect(() => { if (auth.authenticated) void refreshDashboard() }, [auth.authenticated, refreshDashboard])
 
-  if (auth.loading) return <main className="auth-shell"><span className="loading-label">Loading Traker…</span></main>
+  if (auth.loading) return <main className="auth-shell"><span className="loading-label">Loading Koliko…</span></main>
   if (!auth.authenticated) return <Login hasPasskey={auth.hasPasskey} onAuthenticated={() => void refreshAuth()} />
 
   const summary = dashboard?.summary
@@ -580,7 +580,7 @@ export default function App() {
     <Sidebar.Provider defaultOpen collapsible="icon" mobileBreakpoint={620} className="app-shell">
       <Sidebar className="app-sidebar">
         <Sidebar.Header className="app-sidebar-header">
-          <div className="wordmark"><span><LogoMark /></span><strong>traker</strong></div>
+          <div className="wordmark"><span><LogoMark /></span><strong>koliko</strong></div>
         </Sidebar.Header>
         <Sidebar.Content>
           <Sidebar.Group>
@@ -594,7 +594,7 @@ export default function App() {
         </Sidebar.Content>
         <Sidebar.Footer className="app-sidebar-footer">
           <Sidebar.Menu>
-            <Sidebar.MenuButton icon={GithubLogoIcon} href="https://github.com/angristan/traker" tooltip="GitHub">GitHub</Sidebar.MenuButton>
+            <Sidebar.MenuButton icon={GithubLogoIcon} href="https://github.com/angristan/koliko" tooltip="GitHub">GitHub</Sidebar.MenuButton>
           </Sidebar.Menu>
           <Sidebar.Trigger />
         </Sidebar.Footer>

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "traker",
+      "name": "koliko",
       "dependencies": {
         "@cloudflare/kumo": "2.8.0",
         "@phosphor-icons/react": "^2.1.10",

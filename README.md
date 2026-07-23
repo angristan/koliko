@@ -1,10 +1,10 @@
-# Traker
+# Koliko
 
 Self-hostable usage analytics for coding agents.
 
-Traker shows where agent time and tokens go without collecting the work itself. It tracks sessions, models, token usage, provider-reported cost, tools, context compaction, goals, and delegated work. Pi is the first supported collector; the ingestion protocol is agent-agnostic.
+Koliko shows where agent time and tokens go without collecting the work itself. It tracks sessions, models, token usage, provider-reported cost, tools, context compaction, goals, and delegated work. Pi is the first supported collector; the ingestion protocol is agent-agnostic.
 
-## What Traker provides
+## What Koliko provides
 
 - Session, runtime, token, cost, and cache metrics
 - Breakdowns by model, thinking level, and repository folder name
@@ -50,38 +50,38 @@ See [Architecture](docs/architecture.md) for request flows, authentication bound
 
 ## Start collecting with Pi
 
-You need a Traker deployment and an ingestion key created from its **Settings** page.
+You need a Koliko deployment and an ingestion key created from its **Settings** page.
 
 ### 1. Install the collector
 
 ```bash
-pi install git:github.com/angristan/traker
+pi install git:github.com/angristan/koliko
 ```
 
 Reload the current Pi session with `/reload`, or start a new session.
 
 ### 2. Configure it
 
-Create `~/.pi/agent/traker/config.json`:
+Create `~/.pi/agent/koliko/config.json`:
 
 ```json
 {
-  "baseUrl": "https://traker.example.com",
-  "apiKey": "trk_..."
+  "baseUrl": "https://koliko.example.com",
+  "apiKey": "klk_..."
 }
 ```
 
 Protect the file:
 
 ```bash
-chmod 600 ~/.pi/agent/traker/config.json
+chmod 600 ~/.pi/agent/koliko/config.json
 ```
 
 Environment variables override the corresponding file values:
 
 ```bash
-export TRAKER_URL="https://traker.example.com"
-export TRAKER_API_KEY="trk_..."
+export KOLIKO_URL="https://koliko.example.com"
+export KOLIKO_API_KEY="klk_..."
 ```
 
 ### 3. Verify it
@@ -89,11 +89,11 @@ export TRAKER_API_KEY="trk_..."
 Inside Pi:
 
 ```text
-/traker-status
-/traker-flush
+/koliko-status
+/koliko-flush
 ```
 
-Tracking starts with the next Pi session. Traker does not backfill existing sessions.
+Tracking starts with the next Pi session. Koliko does not backfill existing sessions.
 
 See [Pi collector](docs/pi-collector.md) for configuration precedence, event mapping, queue behavior, updates, and troubleshooting.
 
@@ -120,7 +120,7 @@ The short path is:
 bun install
 cp wrangler.production.jsonc.example wrangler.production.jsonc
 bun run build
-bunx wrangler d1 create traker
+bunx wrangler d1 create koliko
 # Update the private production config with the D1 ID and final origin.
 bunx wrangler secret put BOOTSTRAP_TOKEN --config wrangler.production.jsonc
 bunx wrangler secret put SESSION_SECRET --config wrangler.production.jsonc

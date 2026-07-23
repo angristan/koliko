@@ -24,8 +24,8 @@ import {
   type WorkerEnv
 } from "./http"
 
-const SESSION_COOKIE = "traker_session"
-const CHALLENGE_COOKIE = "traker_challenge"
+const SESSION_COOKIE = "koliko_session"
+const CHALLENGE_COOKIE = "koliko_challenge"
 const SESSION_SECONDS = 60 * 60 * 24 * 7
 const CHALLENGE_SECONDS = 60 * 5
 const publicKeyCredentialType: "public-key" = "public-key"
@@ -224,8 +224,8 @@ export const registrationOptions = async (request: Request, env: WorkerEnv): Pro
     rpName: env.RP_NAME,
     rpID: env.RP_ID,
     userName: "owner",
-    userDisplayName: "Traker owner",
-    userID: new TextEncoder().encode("traker-owner"),
+    userDisplayName: "Koliko owner",
+    userID: new TextEncoder().encode("koliko-owner"),
     attestationType: "none",
     excludeCredentials,
     authenticatorSelection: {
@@ -427,7 +427,7 @@ export const createApiKey = async (request: Request, env: WorkerEnv): Promise<Re
   assertSameOrigin(request, env)
   await requireSession(request, env)
   const payload = await decodeRequest(ApiKeyCreatePayload, await readJson(request))
-  const rawKey = `trk_${randomToken(32)}`
+  const rawKey = `klk_${randomToken(32)}`
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
 
@@ -450,7 +450,7 @@ export const revokeApiKey = async (request: Request, env: WorkerEnv, id: string)
 export const authorizeApiKey = async (request: Request, env: WorkerEnv): Promise<string> => {
   const authorization = request.headers.get("authorization") ?? ""
   const rawKey = authorization.startsWith("Bearer ") ? authorization.slice(7) : ""
-  if (!rawKey.startsWith("trk_")) {
+  if (!rawKey.startsWith("klk_")) {
     throw HttpFailure.make({ status: 401, code: "invalid_api_key", message: "A valid ingest API key is required" })
   }
 

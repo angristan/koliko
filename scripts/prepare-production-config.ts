@@ -22,7 +22,7 @@ const validateConfig = (contents: string): void => {
   if (typeof parsed !== "object" || parsed === null) {
     throw new Error("Production Wrangler config must be an object")
   }
-  if (contents.includes("replace-with-your-d1-database-id") || contents.includes("traker.example.com")) {
+  if (contents.includes("replace-with-your-d1-database-id") || contents.includes("koliko.example.com")) {
     throw new Error("Production Wrangler config still contains example values")
   }
 
@@ -59,7 +59,7 @@ const validateConfig = (contents: string): void => {
   }
 }
 
-const encoded = process.env.TRAKER_WRANGLER_CONFIG_B64
+const encoded = process.env.KOLIKO_WRANGLER_CONFIG_B64
 if (encoded) {
   const contents = Buffer.from(encoded, "base64").toString("utf8")
   validateConfig(contents)
@@ -74,7 +74,7 @@ if (encoded) {
     contents = await readFile(configPath, "utf8")
   } catch {
     throw new Error(
-      "Missing wrangler.production.jsonc. Copy the example locally or set TRAKER_WRANGLER_CONFIG_B64 in Workers Builds."
+      "Missing wrangler.production.jsonc. Copy the example locally or set KOLIKO_WRANGLER_CONFIG_B64 in Workers Builds."
     )
   }
   validateConfig(contents)

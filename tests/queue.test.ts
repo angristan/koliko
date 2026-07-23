@@ -14,12 +14,12 @@ const event = (id: string, sequence: number) => TelemetryEvent.make({
   sequence,
   occurredAt: "2026-07-21T12:00:00.000Z",
   type: "runtime_started",
-  repository: "traker"
+  repository: "koliko"
 })
 
 const withTemporaryDirectory = <A, E, R>(use: (directory: string) => Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
-    Effect.promise(() => mkdtemp(join(tmpdir(), "traker-test-"))),
+    Effect.promise(() => mkdtemp(join(tmpdir(), "koliko-test-"))),
     use,
     (directory) => Effect.promise(() => rm(directory, { recursive: true, force: true }))
   )
@@ -34,7 +34,7 @@ describe("telemetry queue", () => {
       })
 
       const path = join(directory, "spool.jsonl")
-      const queue = new TelemetryQueue({ baseUrl: "https://traker.example.com", apiKey: "trk_test" }, path)
+      const queue = new TelemetryQueue({ baseUrl: "https://koliko.example.com", apiKey: "klk_test" }, path)
       yield* Effect.promise(() => queue.enqueue(event("evt_1", 1)))
       const sent = yield* Effect.promise(() => queue.flush())
       const batch = yield* Schema.decodeUnknownEffect(IngestBatch)(requestBody)
@@ -50,7 +50,7 @@ describe("telemetry queue", () => {
   it.effect("preserves events appended by another queue during delivery", () => withTemporaryDirectory(
     (directory) => Effect.gen(function*() {
       const path = join(directory, "spool.jsonl")
-      const config = { baseUrl: "https://traker.example.com", apiKey: "trk_test" }
+      const config = { baseUrl: "https://koliko.example.com", apiKey: "klk_test" }
       const firstQueue = new TelemetryQueue(config, path)
       const secondQueue = new TelemetryQueue(config, path)
       let releaseResponse: (() => void) | undefined
@@ -80,7 +80,7 @@ describe("telemetry queue", () => {
   it.effect("quarantines malformed lines only once when delivery fails", () => withTemporaryDirectory(
     (directory) => Effect.gen(function*() {
       const path = join(directory, "spool.jsonl")
-      const queue = new TelemetryQueue({ baseUrl: "https://traker.example.com", apiKey: "trk_test" }, path)
+      const queue = new TelemetryQueue({ baseUrl: "https://koliko.example.com", apiKey: "klk_test" }, path)
       yield* Effect.promise(() => writeFile(path, `not-json\n${JSON.stringify(event("evt_1", 1))}\n`, "utf8"))
       vi.stubGlobal("fetch", async () => new Response("failure", { status: 503 }))
 

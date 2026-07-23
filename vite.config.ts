@@ -2,7 +2,7 @@ import { cloudflare } from "@cloudflare/vite-plugin"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
-const configPath = process.env.TRAKER_WRANGLER_CONFIG
+const configPath = process.env.KOLIKO_WRANGLER_CONFIG
 
 export default defineConfig({
   plugins: [

@@ -1,6 +1,6 @@
 # Privacy
 
-Traker is designed to answer usage questions without collecting the work performed by the coding agent.
+Koliko is designed to answer usage questions without collecting the work performed by the coding agent.
 
 This document describes the schema enforced by the Pi collector and the Worker. It is a technical data contract, not a general privacy policy for a hosted service.
 
@@ -24,7 +24,7 @@ Repository identity is the basename of the Git root. When no Git root is availab
 - Input, output, cache-read, cache-write, and total token counts
 - Provider-reported total cost
 
-Traker stores the thinking-level setting, such as `high`; it does not store thinking or reasoning content.
+Koliko stores the thinking-level setting, such as `high`; it does not store thinking or reasoning content.
 
 ### Agent features
 
@@ -70,9 +70,9 @@ The Pi collector stores:
 
 | Path | Contents | Mode |
 | --- | --- | --- |
-| `~/.pi/agent/traker/config.json` | Service URL and ingestion key | `0600` |
-| `~/.pi/agent/traker/spool.jsonl` | Pending telemetry events | `0600` |
-| `~/.pi/agent/traker/spool.jsonl.invalid` | Rejected local spool lines, when present | `0600` |
+| `~/.pi/agent/koliko/config.json` | Service URL and ingestion key | `0600` |
+| `~/.pi/agent/koliko/spool.jsonl` | Pending telemetry events | `0600` |
+| `~/.pi/agent/koliko/spool.jsonl.invalid` | Rejected local spool lines, when present | `0600` |
 
 The containing directory is created with mode `0700`. `PI_CODING_AGENT_DIR` changes the base agent directory.
 
@@ -80,7 +80,7 @@ The spool is plaintext metadata. Users who consider repository folder names or m
 
 ## Server-side data
 
-D1 stores telemetry until an operator removes it. Traker currently has no automatic retention window or dashboard deletion workflow.
+D1 stores telemetry until an operator removes it. Koliko currently has no automatic retention window or dashboard deletion workflow.
 
 Operators are responsible for:
 

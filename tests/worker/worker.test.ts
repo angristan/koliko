@@ -12,7 +12,7 @@ const fetchWorker = async (request: Request): Promise<Response> => {
   return response
 }
 
-const insertApiKey = async (id = "key_1", rawKey = "trk_test_key"): Promise<void> => {
+const insertApiKey = async (id = "key_1", rawKey = "klk_test_key"): Promise<void> => {
   await env.DB.prepare(
     "INSERT INTO api_keys (id, name, key_prefix, key_hash, created_at) VALUES (?, ?, ?, ?, ?)"
   ).bind(id, "Test collector", rawKey.slice(0, 12), await sha256(rawKey), "2026-07-21T00:00:00.000Z").run()
@@ -23,7 +23,7 @@ const sessionCookie = async (): Promise<string> => {
     kind: "session",
     expiresAt: Date.now() + 60_000
   })
-  return `traker_session=${encodeURIComponent(token)}`
+  return `koliko_session=${encodeURIComponent(token)}`
 }
 
 describe("Worker runtime", () => {
@@ -47,11 +47,11 @@ describe("Worker runtime", () => {
     const response = await fetchWorker(new Request("https://example.test/api/v1/events", {
       method: "POST",
       headers: {
-        authorization: "Bearer trk_test_key",
+        authorization: "Bearer klk_test_key",
         "content-type": "application/json"
       },
       body: JSON.stringify({
-        clientName: "traker-pi-extension",
+        clientName: "koliko-pi-extension",
         clientVersion: "0.1.0",
         events: [{
           schemaVersion: 1,
@@ -61,7 +61,7 @@ describe("Worker runtime", () => {
           sequence: 1,
           occurredAt: "2026-07-21T12:00:00.000Z",
           type: "usage",
-          repository: "traker",
+          repository: "koliko",
           totalTokens: 42,
           attributes: { source: "assistant" }
         }]
@@ -79,11 +79,11 @@ describe("Worker runtime", () => {
     const response = await fetchWorker(new Request("https://example.test/api/v1/events", {
       method: "POST",
       headers: {
-        authorization: "Bearer trk_test_key",
+        authorization: "Bearer klk_test_key",
         "content-type": "application/json"
       },
       body: JSON.stringify({
-        clientName: "traker-pi-extension",
+        clientName: "koliko-pi-extension",
         clientVersion: "0.1.0",
         events: [{
           schemaVersion: 1,
@@ -93,7 +93,7 @@ describe("Worker runtime", () => {
           sequence: 1,
           occurredAt: "0",
           type: "usage",
-          repository: "traker",
+          repository: "koliko",
           totalTokens: -1
         }]
       })
@@ -168,7 +168,7 @@ describe("Worker runtime", () => {
        SELECT
          'evt_' || value, 1, 'key_1', 'session_1', 'runtime_1', value,
          '2026-07-21T12:00:00.' || printf('%03d', value) || 'Z',
-         'model_selected', 'traker', 'provider',
+         'model_selected', 'koliko', 'provider',
          CASE WHEN value = 501 THEN 'a-latest' WHEN value = 500 THEN 'z-older' ELSE NULL END,
          '{}'
        FROM event_sequence`

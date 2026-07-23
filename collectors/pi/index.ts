@@ -70,7 +70,7 @@ const withTimeout = async (work: Promise<unknown>, milliseconds: number): Promis
   ])
 }
 
-export default function trackerExtension(pi: ExtensionAPI) {
+export default function kolikoExtension(pi: ExtensionAPI) {
   let config: LoadedConfig | undefined
   let queue: TelemetryQueue | undefined
   let timer: ReturnType<typeof setInterval> | undefined
@@ -299,12 +299,12 @@ export default function trackerExtension(pi: ExtensionAPI) {
     await withTimeout(queue.flush().catch(() => undefined), 2_000)
   })
 
-  pi.registerCommand("traker-config", {
-    description: "Set the Traker service URL (API key stays in TRAKER_API_KEY or the private config file)",
+  pi.registerCommand("koliko-config", {
+    description: "Set the Koliko service URL (API key stays in KOLIKO_API_KEY or the private config file)",
     handler: async (args, ctx) => {
       const url = args.trim()
       if (!url) {
-        ctx.ui.notify(`Usage: /traker-config https://traker.example.com\nConfig: ${configPath}`, "info")
+        ctx.ui.notify(`Usage: /koliko-config https://koliko.example.com\nConfig: ${configPath}`, "info")
         return
       }
       try {
@@ -312,40 +312,40 @@ export default function trackerExtension(pi: ExtensionAPI) {
         await configure()
         ctx.ui.notify(
           queue
-            ? "Traker configured and enabled."
-            : `Service URL saved. Set TRAKER_API_KEY or add apiKey to ${configPath}.`,
+            ? "Koliko configured and enabled."
+            : `Service URL saved. Set KOLIKO_API_KEY or add apiKey to ${configPath}.`,
           "info"
         )
       } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : "Could not save Traker configuration", "error")
+        ctx.ui.notify(error instanceof Error ? error.message : "Could not save Koliko configuration", "error")
       }
     }
   })
 
-  pi.registerCommand("traker-status", {
-    description: "Show Traker connection status",
+  pi.registerCommand("koliko-status", {
+    description: "Show Koliko connection status",
     handler: async (_args, ctx) => {
       ctx.ui.notify(
         queue
           ? `Enabled: ${config?.baseUrl}\nRepository labels use folder names only.`
-          : `Disabled. Set TRAKER_URL and TRAKER_API_KEY, or configure ${configPath}.`,
+          : `Disabled. Set KOLIKO_URL and KOLIKO_API_KEY, or configure ${configPath}.`,
         "info"
       )
     }
   })
 
-  pi.registerCommand("traker-flush", {
-    description: "Send queued Traker events now",
+  pi.registerCommand("koliko-flush", {
+    description: "Send queued Koliko events now",
     handler: async (_args, ctx) => {
       if (!queue) {
-        ctx.ui.notify("Traker is not configured.", "warning")
+        ctx.ui.notify("Koliko is not configured.", "warning")
         return
       }
       try {
         const sent = await queue.flush()
         ctx.ui.notify(`Sent ${sent} queued event${sent === 1 ? "" : "s"}.`, "info")
       } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : "Traker flush failed", "error")
+        ctx.ui.notify(error instanceof Error ? error.message : "Koliko flush failed", "error")
       }
     }
   })

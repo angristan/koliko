@@ -25,9 +25,9 @@ describe("authentication crypto", () => {
   }))
 
   it.effect("hashes API keys deterministically without storing plaintext", () => Effect.gen(function*() {
-    const first = yield* Effect.promise(() => sha256("trk_example"))
-    const second = yield* Effect.promise(() => sha256("trk_example"))
+    const first = yield* Effect.promise(() => sha256("klk_example"))
+    const second = yield* Effect.promise(() => sha256("klk_example"))
     assert.strictEqual(first, second)
-    assert.notStrictEqual(first, "trk_example")
+    assert.notStrictEqual(first, "klk_example")
   }))
 })
