@@ -8,35 +8,30 @@ if (typeof origin !== "string" || !origin.startsWith("https://")) {
   throw new Error("Production EXPECTED_ORIGIN must be an HTTPS origin")
 }
 
-const statusResponse = await fetch(`${origin}/api/auth/status`)
-if (!statusResponse.ok) {
-  throw new Error(`Production auth status returned HTTP ${statusResponse.status}`)
-}
-const status: unknown = await statusResponse.json()
-if (
-  typeof status !== "object"
-  || status === null
-  || typeof (status as { authenticated?: unknown }).authenticated !== "boolean"
-  || typeof (status as { hasPasskey?: unknown }).hasPasskey !== "boolean"
-) {
-  throw new Error("Production auth status response is invalid")
+const response = await fetch(`${origin}/api/v1/events`, {
+  method: "POST",
+  redirect: "manual"
+})
+if (response.status !== 401) {
+  throw new Error(`Production ingestion authentication returned HTTP ${response.status}`)
 }
 
-const dashboardResponse = await fetch(origin)
-if (!dashboardResponse.ok) {
-  throw new Error(`Production dashboard returned HTTP ${dashboardResponse.status}`)
+let payload: unknown
+try {
+  payload = await response.json()
+} catch {
+  throw new Error("Production ingestion authentication response is not JSON")
 }
-for (const header of [
-  "content-security-policy",
-  "permissions-policy",
-  "referrer-policy",
-  "x-content-type-options",
-  "x-frame-options"
-]) {
-  if (!dashboardResponse.headers.has(header)) {
-    throw new Error(`Production dashboard is missing ${header}`)
-  }
+if (
+  typeof payload !== "object"
+  || payload === null
+  || !("error" in payload)
+  || typeof payload.error !== "object"
+  || payload.error === null
+  || !("code" in payload.error)
+  || payload.error.code !== "invalid_api_key"
+) {
+  throw new Error("Production ingestion authentication response is invalid")
 }
-await dashboardResponse.body?.cancel()
 
 console.log("Production smoke checks passed")
