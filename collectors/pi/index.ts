@@ -1,8 +1,9 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
 import { basename } from "node:path"
 import { Schema } from "effect"
 import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../../src/shared/protocol"
 import { configPath, loadConfig, saveBaseUrl, spoolPath, type LoadedConfig } from "./config"
+import { DeliveryMonitor } from "./delivery-monitor"
 import { TelemetryQueue } from "./queue"
 
 const FLUSH_INTERVAL_MS = 15_000
@@ -74,6 +75,7 @@ export default function kolikoExtension(pi: ExtensionAPI) {
   let config: LoadedConfig | undefined
   let queue: TelemetryQueue | undefined
   let timer: ReturnType<typeof setInterval> | undefined
+  let activeContext: ExtensionContext | undefined
   let sessionId = "unknown"
   let runtimeId = crypto.randomUUID()
   let repository = "unknown"
@@ -84,6 +86,28 @@ export default function kolikoExtension(pi: ExtensionAPI) {
   let model: string | undefined
   let thinkingLevel: ThinkingLevelValue = "off"
   const toolExecutions = new Map<string, { readonly startedAt: number; readonly args: unknown }>()
+  const deliveryMonitor = new DeliveryMonitor({
+    onFailure(message) {
+      if (!activeContext?.hasUI) return
+      activeContext.ui.setStatus("koliko-delivery", "Koliko: delivery failed")
+      activeContext.ui.notify(
+        `Koliko collector delivery failed: ${message}\nEvents remain queued. Run /koliko-flush after fixing the connection.`,
+        "warning"
+      )
+    },
+    onRecovery() {
+      if (!activeContext?.hasUI) return
+      activeContext.ui.setStatus("koliko-delivery", undefined)
+      activeContext.ui.notify("Koliko collector delivery recovered. Queued events are being sent.", "info")
+    }
+  })
+
+  const flushQueue = (): Promise<number> =>
+    queue ? deliveryMonitor.flush(queue) : Promise.resolve(0)
+
+  const flushInBackground = (): void => {
+    void flushQueue().catch(() => undefined)
+  }
 
   const record = async (
     type: EventType,
@@ -116,7 +140,7 @@ export default function kolikoExtension(pi: ExtensionAPI) {
     })
     await queue.enqueue(event)
 
-    if (sequence % 25 === 0) void queue.flush().catch(() => undefined)
+    if (sequence % 25 === 0) flushInBackground()
   }
 
   const recordUsage = (
@@ -140,9 +164,14 @@ export default function kolikoExtension(pi: ExtensionAPI) {
   const configure = async (): Promise<void> => {
     config = await loadConfig()
     queue = config ? new TelemetryQueue(config, spoolPath) : undefined
+    if (!queue) {
+      deliveryMonitor.reset()
+      if (activeContext?.hasUI) activeContext.ui.setStatus("koliko-delivery", undefined)
+    }
   }
 
   pi.on("session_start", async (event, ctx) => {
+    activeContext = ctx
     await configure()
     if (!queue) return
 
@@ -166,10 +195,8 @@ export default function kolikoExtension(pi: ExtensionAPI) {
     })
 
     if (timer) clearInterval(timer)
-    timer = setInterval(() => {
-      void queue?.flush().catch(() => undefined)
-    }, FLUSH_INTERVAL_MS)
-    void queue.flush().catch(() => undefined)
+    timer = setInterval(flushInBackground, FLUSH_INTERVAL_MS)
+    flushInBackground()
   })
 
   pi.on("agent_start", async () => {
@@ -186,7 +213,7 @@ export default function kolikoExtension(pi: ExtensionAPI) {
       thinkingLevel,
       durationMs
     })
-    void queue?.flush().catch(() => undefined)
+    flushInBackground()
   })
 
   pi.on("message_end", async (event) => {
@@ -296,7 +323,7 @@ export default function kolikoExtension(pi: ExtensionAPI) {
       durationMs: Date.now() - runtimeStartedAt,
       attributes: { reason: event.reason }
     })
-    await withTimeout(queue.flush().catch(() => undefined), 2_000)
+    await withTimeout(flushQueue().catch(() => undefined), 2_000)
   })
 
   pi.registerCommand("koliko-config", {
@@ -327,7 +354,7 @@ export default function kolikoExtension(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       ctx.ui.notify(
         queue
-          ? `Enabled: ${config?.baseUrl}\nRepository labels use folder names only.`
+          ? `Enabled: ${config?.baseUrl}\nDelivery: ${deliveryMonitor.isFailing ? "failing; events remain queued" : "no failure detected"}.\nRepository labels use folder names only.`
           : `Disabled. Set KOLIKO_URL and KOLIKO_API_KEY, or configure ${configPath}.`,
         "info"
       )
@@ -342,7 +369,8 @@ export default function kolikoExtension(pi: ExtensionAPI) {
         return
       }
       try {
-        const sent = await queue.flush()
+        activeContext = ctx
+        const sent = await flushQueue()
         ctx.ui.notify(`Sent ${sent} queued event${sent === 1 ? "" : "s"}.`, "info")
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : "Koliko flush failed", "error")
