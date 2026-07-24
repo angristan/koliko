@@ -14,13 +14,7 @@ Koliko shows where agent time and tokens go without collecting the work itself. 
 
 ## Dashboard
 
-### Overview
-
 ![Koliko overview dashboard showing usage, cost, cache, model, and repository analytics](docs/images/dashboard-overview.png)
-
-### Analytics
-
-![Koliko analytics dashboard showing token composition, activity, and thinking-level breakdowns](docs/images/dashboard-analytics.png)
 
 ## Data boundary
 
