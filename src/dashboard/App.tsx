@@ -92,7 +92,7 @@ const money = new Intl.NumberFormat("en", {
   style: "currency",
   currency: "USD",
   minimumFractionDigits: 2,
-  maximumFractionDigits: 4
+  maximumFractionDigits: 2
 })
 const formatDuration = (milliseconds: number): string => {
   const totalMinutes = Math.round(milliseconds / 60_000)
