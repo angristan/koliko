@@ -116,6 +116,14 @@ Common fields include session and runtime IDs, sequence, timestamp, repository f
 
 See [Privacy](privacy.md) for the content boundary and [Pi collector](pi-collector.md) for the Pi-to-event mapping.
 
+## Dashboard metrics
+
+- **Agent time**: time between `agent_start` and `agent_settled`; idle time between prompts is excluded.
+- **Cache read rate**: cache-read tokens divided by input plus cache-read tokens.
+- **Cost**: the provider-reported total exposed by Pi for assistant, nested tool-model, compaction, and branch-summary usage when available.
+- **Tool success**: completed tool calls without an error divided by all completed tool calls.
+- **Sessions**: distinct Pi session IDs active in the selected date range.
+
 ## Failure behavior
 
 | Failure | Behavior |
