@@ -28,9 +28,33 @@
     "smoke:production": "bun scripts/smoke-production.ts",
     "db:migrate:local": "wrangler d1 migrations apply koliko --local",
     "db:seed:local": "bun scripts/seed-local.ts",
-    "db:migrate:remote": "bun run prepare:production-config && wrangler d1 migrations apply koliko --remote --config wrangler.production.jsonc",
-    "deploy:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run",
-    "deploy": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply koliko --remote --config wrangler.production.jsonc && wrangler deploy && bun run smoke:production"
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy:dry-run": "bun run build && wrangler deploy --dry-run",
+    "deploy": "bun run db:migrate:remote && wrangler deploy",
+    "deploy:production:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run --config wrangler.production.jsonc",
+    "deploy:production": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc && wrangler deploy --config wrangler.production.jsonc && bun run smoke:production"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "Koliko stores passkeys, ingestion keys, and usage analytics in this D1 database."
+      },
+      "RP_NAME": {
+        "description": "The name shown by passkey prompts. `Koliko` is recommended."
+      },
+      "RP_ID": {
+        "description": "The final dashboard hostname without a scheme or path, for example `koliko.<your-subdomain>.workers.dev`. Set this before registering a passkey."
+      },
+      "EXPECTED_ORIGIN": {
+        "description": "The exact HTTPS dashboard origin with no trailing slash, for example `https://koliko.<your-subdomain>.workers.dev`."
+      },
+      "BOOTSTRAP_TOKEN": {
+        "description": "Generate an independent random value with `openssl rand -base64 32`. Save it: you need it to register the first passkey."
+      },
+      "SESSION_SECRET": {
+        "description": "Generate a different random value with `openssl rand -base64 48`. Koliko uses it to sign challenges and sessions."
+      }
+    }
   },
   "pi": {
     "extensions": [

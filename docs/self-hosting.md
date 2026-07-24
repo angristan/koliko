@@ -12,7 +12,24 @@ Koliko runs as one Cloudflare Worker with Static Assets and one D1 database.
 
 Choose the hostname before registering a passkey. WebAuthn credentials are bound to the relying-party ID and origin.
 
-## 1. Clone and install
+## Deploy with Cloudflare
+
+[Start a Cloudflare deployment](https://deploy.workers.cloudflare.com/?url=https://github.com/angristan/koliko). The deployment flow creates a repository in your GitHub or GitLab account, provisions D1, prompts for the required variables and secrets, applies migrations, and configures Workers Builds.
+
+Before deploying:
+
+1. Choose the Worker name. The initial origin is `https://<worker-name>.<your-subdomain>.workers.dev`.
+2. Set `RP_ID` to that hostname without the scheme or a path.
+3. Set `EXPECTED_ORIGIN` to the exact HTTPS origin without a trailing slash.
+4. Generate independent `BOOTSTRAP_TOKEN` and `SESSION_SECRET` values. Save the bootstrap token securely for first-passkey registration and disaster recovery.
+
+The button cannot attach a custom domain. To use one, attach it in Cloudflare and update both WebAuthn values before registering the first passkey.
+
+The public Wrangler template persists Workers Logs and Traces at full sampling. Observability volume scales with requests, captured spans, and logs. Review usage and lower or disable sampling if traffic warrants it.
+
+## Manual deployment
+
+### 1. Clone and install
 
 ```bash
 git clone git@github.com:angristan/koliko.git
@@ -24,7 +41,7 @@ bunx wrangler whoami
 
 Review the account shown by Wrangler before creating resources.
 
-## 2. Create D1
+### 2. Create D1
 
 ```bash
 bunx wrangler d1 create koliko
@@ -47,7 +64,7 @@ The tracked `wrangler.jsonc` remains configured for localhost. Real database IDs
 
 You can add `--location weur`, `--location enam`, or another supported location hint when creating the database.
 
-## 3. Configure the final origin
+### 3. Configure the final origin
 
 For a custom domain:
 
@@ -88,7 +105,7 @@ The production template explicitly persists Workers Logs and Traces at full samp
 
 Observability event volume scales approximately with requests plus captured spans and logs. Review Cloudflare usage before a high-traffic deployment. To stop trace ingestion quickly, set `observability.traces.enabled` to `false` and redeploy; choose a lower sampling rate only from measured traffic and retention requirements.
 
-## 4. Create secrets
+### 4. Create secrets
 
 Generate independent random values:
 
@@ -102,16 +119,16 @@ openssl rand -base64 48 | bunx wrangler secret put SESSION_SECRET --config wrang
 
 Do not put either value in `wrangler.jsonc`, Git, shell history, or issue reports.
 
-## 5. Migrate and deploy
+### 5. Migrate and deploy
 
 ```bash
-bun run deploy:dry-run
-bun run deploy
+bun run deploy:production:dry-run
+bun run deploy:production
 ```
 
 The deployment validates types and tests, builds the dashboard, applies pending migrations, uploads the Worker and assets, and runs production smoke checks.
 
-## 6. Register the first passkey
+### 6. Register the first passkey
 
 Open the final origin in a WebAuthn-capable browser.
 
@@ -177,7 +194,7 @@ Keep `wrangler.production.jsonc` ignored. Workers Builds can reconstruct it from
 1. Base64-encode the complete production config without printing it to logs.
 2. Create a secret build variable named `KOLIKO_WRANGLER_CONFIG_B64` on the production trigger.
 3. Limit the trigger to `main`; do not create a preview trigger backed by the production D1 database.
-4. Leave the separate build command empty and use `bun run deploy` as the deploy command.
+4. Leave the separate build command empty and use `bun run deploy:production` as the deploy command.
 5. Enable build caching and pin the desired Bun version with a non-secret `BUN_VERSION` build variable when needed.
 
 `scripts/prepare-production-config.ts` decodes the secret into a mode-`0600` file and rejects example values. The deployment command then runs checks, applies migrations, deploys, and verifies the live service.
@@ -191,7 +208,7 @@ Manual upgrade:
 ```bash
 git pull --ff-only
 bun install
-bun run deploy
+bun run deploy:production
 ```
 
 With Workers Builds enabled, a push to `main` runs the same deployment command automatically.

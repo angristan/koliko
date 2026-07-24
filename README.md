@@ -1,5 +1,7 @@
 # Koliko
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/angristan/koliko)
+
 Self-hostable usage analytics for coding agents.
 
 Koliko shows where agent time and tokens go without collecting the work itself. It tracks sessions, models, token usage, provider-reported cost, tools, context compaction, goals, and delegated work. Pi is the first supported collector; the ingestion protocol is agent-agnostic.
@@ -112,10 +114,24 @@ Requirements:
 
 - A Cloudflare account with Workers and D1 access
 - A domain or `workers.dev` hostname fixed before passkey registration
-- Bun
 - A WebAuthn-capable browser
 
-The short path is:
+### Deploy with Cloudflare
+
+Use the Deploy to Cloudflare button at the top of this page. Cloudflare creates a repository in your Git account, provisions and migrates D1, configures Workers Builds, and deploys Koliko. During setup:
+
+1. Choose the Worker name and D1 database name.
+2. Replace `RP_ID` with the final hostname, such as `koliko.<your-subdomain>.workers.dev`.
+3. Replace `EXPECTED_ORIGIN` with the matching HTTPS origin, such as `https://koliko.<your-subdomain>.workers.dev`.
+4. Generate independent values for `BOOTSTRAP_TOKEN` and `SESSION_SECRET`. Save the bootstrap token because it is required to register the first passkey.
+
+If you want a custom domain, attach it and update the WebAuthn values before registering the first passkey. Passkeys cannot move between relying-party IDs.
+
+The public template persists Workers Logs and Traces at full sampling. Review observability usage and choose lower sampling rates if traffic warrants it.
+
+### Deploy manually
+
+The short path requires Bun:
 
 ```bash
 bun install
@@ -125,7 +141,7 @@ bunx wrangler d1 create koliko
 # Update the private production config with the D1 ID and final origin.
 bunx wrangler secret put BOOTSTRAP_TOKEN --config wrangler.production.jsonc
 bunx wrangler secret put SESSION_SECRET --config wrangler.production.jsonc
-bun run deploy
+bun run deploy:production
 ```
 
 Follow [Self-hosting](docs/self-hosting.md) before running these commands. It covers the exact configuration, first passkey, secret rotation, migrations, and production checks.
