@@ -1,7 +1,5 @@
 # Koliko
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/angristan/koliko)
-
 Self-hostable usage analytics for coding agents.
 
 Koliko shows where agent time and tokens go without collecting the work itself. It tracks sessions, models, token usage, provider-reported cost, tools, context compaction, goals, and delegated work. Pi is the first supported collector; the ingestion protocol is agent-agnostic.
@@ -118,7 +116,9 @@ Requirements:
 
 ### Deploy with Cloudflare
 
-Use the Deploy to Cloudflare button at the top of this page. Cloudflare creates a repository in your Git account, provisions and migrates D1, configures Workers Builds, and deploys Koliko. During setup:
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/angristan/koliko)
+
+Cloudflare creates a repository in your Git account, provisions and migrates D1, configures Workers Builds, and deploys Koliko. During setup:
 
 1. Choose the Worker name and D1 database name.
 2. Replace `RP_ID` with the final hostname, such as `koliko.<your-subdomain>.workers.dev`.
