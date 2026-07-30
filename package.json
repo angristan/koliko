@@ -31,8 +31,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "deploy:dry-run": "bun run build && wrangler deploy --dry-run",
     "deploy": "bun run db:migrate:remote && wrangler deploy",
-    "deploy:production:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run --config wrangler.production.jsonc",
-    "deploy:production": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc && wrangler deploy --config wrangler.production.jsonc && bun run smoke:production"
+    "deploy:production:dry-run": "bun run prepare:production-config && bun run build:production && wrangler deploy --dry-run",
+    "deploy:production": "bun run prepare:production-config && bun run verify && bun run build:production && wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc && wrangler deploy && bun run smoke:production"
   },
   "cloudflare": {
     "bindings": {
