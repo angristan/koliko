@@ -55,7 +55,6 @@ import {
   ShieldCheckIcon,
   SidebarSimpleIcon,
   SignOutIcon,
-  SparkleIcon,
   SunIcon,
   TerminalWindowIcon,
   TimerIcon,
@@ -247,69 +246,60 @@ function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
 
   return (
     <main className="auth-shell">
-      <Paper radius="xl" className="auth-card">
-        <section className="auth-showcase">
-          <Brand />
-          <Stack gap="lg" className="auth-showcase-copy">
-            <Badge variant="light" color="tangerine" leftSection={<SparkleIcon size={12} />}>Private by design</Badge>
-            <Title order={1}>Clarity for every<br /><span>agent run.</span></Title>
-            <Text c="dimmed" maw={480}>Understand time, tokens, costs, and workflows without collecting the work itself.</Text>
-          </Stack>
-          <SimpleGrid cols={3} spacing="sm" className="auth-mini-metrics">
-            {[["Prompts", "Never"], ["Source code", "Never"], ["Usage signals", "Only"]].map(([label, value]) => (
-              <Paper key={label} p="md" radius="md" className="auth-mini-card">
-                <Text size="xs" c="dimmed">{label}</Text>
-                <Text fw={700} mt={4}>{value}</Text>
-              </Paper>
-            ))}
-          </SimpleGrid>
-        </section>
+      <Box className="auth-layout">
+        <Box className="auth-brand"><Brand /></Box>
+        <Paper radius="lg" className="auth-card">
+          <Box
+            component="form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void act()
+            }}
+          >
+            <Stack gap="lg">
+              <Group gap="md" wrap="nowrap" align="flex-start" className="auth-heading">
+                <ThemeIcon size={40} radius="md" variant="light" color="tangerine">
+                  {hasPasskey ? <LockKeyIcon size={20} /> : <ShieldCheckIcon size={20} />}
+                </ThemeIcon>
+                <Box>
+                  <Title order={1}>{hasPasskey ? "Sign in to Koliko" : "Set up Koliko"}</Title>
+                  <Text c="dimmed" size="sm" mt={4}>
+                    {hasPasskey
+                      ? "Use your passkey to open your dashboard."
+                      : "Enter the bootstrap token configured for this Worker. You’ll create a passkey next."}
+                  </Text>
+                </Box>
+              </Group>
 
-        <section className="auth-form">
-          <Stack gap="xl">
-            <Box>
-              <ThemeIcon size={48} radius="md" variant="light" color="tangerine" mb="lg">
-                {hasPasskey ? <LockKeyIcon size={24} /> : <ShieldCheckIcon size={24} />}
-              </ThemeIcon>
-              <Title order={2}>{hasPasskey ? "Welcome back" : "Set up your workspace"}</Title>
-              <Text c="dimmed" size="sm" mt={8}>
-                {hasPasskey ? "Use your passkey to securely continue to Koliko." : "Enter your bootstrap token, then register your first passkey."}
-              </Text>
-            </Box>
+              {error && <Alert color="red" icon={<WarningCircleIcon />} title="Authentication failed">{errorMessage(error, "Authentication failed")}</Alert>}
 
-            {error && <Alert color="red" icon={<WarningCircleIcon />} title="Authentication failed">{errorMessage(error, "Authentication failed")}</Alert>}
+              {!hasPasskey && (
+                <PasswordInput
+                  label="Bootstrap token"
+                  description="Configured in your Worker environment"
+                  autoComplete="off"
+                  value={token}
+                  onChange={(event) => setToken(event.currentTarget.value)}
+                  placeholder="BOOTSTRAP_TOKEN"
+                  size="md"
+                />
+              )}
 
-            {!hasPasskey && (
-              <PasswordInput
-                label="Bootstrap token"
-                description="Configured in your Worker environment"
-                autoComplete="off"
-                value={token}
-                onChange={(event) => setToken(event.currentTarget.value)}
-                placeholder="BOOTSTRAP_TOKEN"
+              <Button
+                className="auth-submit"
+                type="submit"
                 size="md"
-              />
-            )}
-
-            <Button
-              size="md"
-              loading={busy}
-              disabled={!hasPasskey && token.length === 0}
-              onClick={() => void act()}
-              leftSection={<ShieldCheckIcon size={18} />}
-              rightSection={<ArrowRightIcon size={17} />}
-              fullWidth
-            >
-              {hasPasskey ? "Continue with passkey" : "Register passkey"}
-            </Button>
-
-            <Group gap="xs" wrap="nowrap" align="flex-start">
-              <ShieldCheckIcon size={16} className="privacy-icon" />
-              <Text size="xs" c="dimmed">Prompts, responses, source code, tool arguments, and full paths never leave your machine.</Text>
-            </Group>
-          </Stack>
-        </section>
-      </Paper>
+                loading={busy}
+                disabled={!hasPasskey && token.length === 0}
+                leftSection={hasPasskey ? <LockKeyIcon size={18} /> : <ShieldCheckIcon size={18} />}
+                fullWidth
+              >
+                {hasPasskey ? "Sign in with passkey" : "Create passkey"}
+              </Button>
+            </Stack>
+          </Box>
+        </Paper>
+      </Box>
     </main>
   )
 }
