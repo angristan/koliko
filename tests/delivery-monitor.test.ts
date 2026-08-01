@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { DeliveryMonitor } from "../collectors/pi/delivery-monitor"
 
 describe("delivery monitor", () => {
-  it("warns once per outage and reports recovery", async () => {
+  it("reports each outage once and detects recovery", async () => {
     const onFailure = vi.fn()
     const onRecovery = vi.fn()
     const queue = {

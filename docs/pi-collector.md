@@ -123,10 +123,10 @@ The queue:
 - sends at most 100 events per request;
 - attempts a bounded two-second flush during shutdown;
 - atomically rewrites the spool only after HTTP success;
-- shows one warning and a persistent `Koliko: delivery failed` status when background delivery first fails;
-- suppresses duplicate warnings during the same outage, then clears the status and announces recovery after a successful flush.
+- shows a persistent `Koliko: delivery failed` footer status when background delivery fails;
+- keeps the transcript quiet during repeated failures and recoveries, then clears the status after a successful flush.
 
-Network errors and non-success HTTP responses leave the current batch in place. Event IDs make server-side retries idempotent. The warning includes the delivery error, while `/koliko-status` reports whether the current session has detected a failure.
+Network errors and non-success HTTP responses leave the current batch in place. Event IDs make server-side retries idempotent. `/koliko-status` reports whether the current session has detected a failure, and `/koliko-flush` shows the current delivery error when a manual retry fails.
 
 Malformed JSONL lines are copied to `spool.jsonl.invalid` and removed from the active spool. Inspect that file before deleting it.
 

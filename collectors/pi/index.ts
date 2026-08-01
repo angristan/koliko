@@ -4,6 +4,7 @@ import { Effect, Schema } from "effect"
 import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../../src/shared/protocol"
 import { configPath, loadConfig, saveBaseUrl, spoolPath, type LoadedConfig } from "./config"
 import { DeliveryMonitor } from "./delivery-monitor"
+import { createDeliveryStatusFeedback } from "./delivery-status"
 import { TelemetryQueue } from "./queue"
 
 const FLUSH_INTERVAL_MS = 15_000
@@ -89,21 +90,9 @@ export default function kolikoExtension(pi: ExtensionAPI) {
   let model: string | undefined
   let thinkingLevel: ThinkingLevelValue = "off"
   const toolExecutions = new Map<string, { readonly startedAt: number; readonly args: unknown }>()
-  const deliveryMonitor = new DeliveryMonitor({
-    onFailure(message) {
-      if (!activeContext?.hasUI) return
-      activeContext.ui.setStatus("koliko-delivery", "Koliko: delivery failed")
-      activeContext.ui.notify(
-        `Koliko collector delivery failed: ${message}\nEvents remain queued. Run /koliko-flush after fixing the connection.`,
-        "warning"
-      )
-    },
-    onRecovery() {
-      if (!activeContext?.hasUI) return
-      activeContext.ui.setStatus("koliko-delivery", undefined)
-      activeContext.ui.notify("Koliko collector delivery recovered. Queued events are being sent.", "info")
-    }
-  })
+  const deliveryMonitor = new DeliveryMonitor(createDeliveryStatusFeedback(
+    () => activeContext?.hasUI ? activeContext.ui : undefined
+  ))
 
   const flushQueue = (signal?: AbortSignal): Promise<number> =>
     queue ? deliveryMonitor.flush(queue, signal) : Promise.resolve(0)
