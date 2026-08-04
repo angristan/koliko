@@ -48,6 +48,21 @@ describe("Worker runtime", () => {
     expect(await response.text()).toBe("Not found")
   })
 
+  it("returns stable API not-found responses", async () => {
+    const unknownRoute = await fetchWorker(new Request("https://example.test/api/unknown"))
+    const unsupportedMethod = await fetchWorker(new Request("https://example.test/api/auth/status", {
+      method: "PUT"
+    }))
+
+    for (const response of [unknownRoute, unsupportedMethod]) {
+      expect(response.status).toBe(404)
+      expect(await response.json()).toEqual({
+        error: { code: "not_found", message: "API route was not found" }
+      })
+      expect(response.headers.get("cache-control")).toBe("no-store")
+    }
+  })
+
   it("serves authentication status through Workerd", async () => {
     const response = await fetchWorker(new Request("https://example.test/api/auth/status"))
 

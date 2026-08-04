@@ -45,7 +45,7 @@ Only `/api/*` requests enter the Worker, where Smart Placement can optimize D1 l
 2. authenticate and persist telemetry batches;
 3. query D1 for dashboard summaries and session details.
 
-TanStack Query owns browser-side server-state caching, cancellation, refreshes, and mutation invalidation. Effect models the browser API client, Worker workflows, collector delivery, typed failures, and boundary decoding. Native D1 SQL and batches remain the persistence adapter so database invariants and batch metadata stay explicit.
+TanStack Query owns browser-side server-state caching, cancellation, refreshes, and mutation invalidation. Hono is the thin Worker routing layer. Effect models the browser API client, Worker workflows, collector delivery, typed failures, and boundary decoding. Native D1 SQL and batches remain the persistence adapter so database invariants and batch metadata stay explicit.
 
 ### D1
 
