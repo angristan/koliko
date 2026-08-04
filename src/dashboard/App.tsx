@@ -490,9 +490,8 @@ function Settings() {
                 </Box>
                 {!key.revokedAt && (
                   <Button
-                    variant="subtle"
+                    variant="light"
                     color="rust"
-                    size="compact-sm"
                     loading={revokeMutation.isPending && revokeMutation.variables === key.id}
                     onClick={() => revokeMutation.mutate(key.id, {
                       onError: (cause) => setKeyMessage(errorMessage(cause, "API key could not be revoked"))
@@ -545,17 +544,15 @@ function Settings() {
                     {passkey.backedUp ? "Synced" : passkey.deviceType === "multiDevice" ? "Multi-device" : "Device-bound"}
                     {` · added ${new Date(passkey.createdAt).toLocaleDateString()}`}
                     {passkey.lastUsedAt ? ` · last used ${new Date(passkey.lastUsedAt).toLocaleDateString()}` : " · never used"}
+                    {passkeys.length === 1 ? " · only passkey" : ""}
                   </Text>
                 </Box>
-                {passkeys.length > 1 ? (
+                {passkeys.length > 1 && (
                   <Button
-                    variant="subtle"
+                    variant="light"
                     color="rust"
-                    size="compact-sm"
                     onClick={() => setPasskeyToRemove(passkey)}
                   >Remove</Button>
-                ) : (
-                  <Badge size="sm" variant="light" color="gray">Required</Badge>
                 )}
               </Group>
             ))}
