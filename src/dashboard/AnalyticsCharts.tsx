@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type PointerEvent, type ReactNode } from "react"
 import {
   Badge,
   Box,
@@ -75,12 +75,11 @@ const EMPTY_DASHBOARD = DashboardResponse.make({
 })
 
 const chartColors = [
-  "var(--koliko-chart-sand)",
-  "var(--koliko-chart-accent)",
-  "var(--koliko-chart-gold)",
-  "var(--koliko-chart-ochre)",
-  "var(--koliko-chart-caramel)",
-  "var(--koliko-chart-taupe)"
+  "var(--koliko-chart-teal)",
+  "var(--koliko-chart-zinc)",
+  "var(--koliko-chart-secondary)",
+  "var(--koliko-chart-orange)",
+  "var(--koliko-chart-walnut)"
 ] as const
 
 const formatDate = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString("en", {
@@ -131,7 +130,7 @@ function ChartEmpty({ icon, title, detail }: { readonly icon: ReactNode; readonl
   return (
     <Center className="chart-empty">
       <Stack align="center" gap="xs" ta="center">
-        <ThemeIcon size={38} radius="xl" variant="light" color="gray">{icon}</ThemeIcon>
+        <ThemeIcon size={38} radius="md" variant="light" color="sky">{icon}</ThemeIcon>
         <Text size="sm" fw={600}>{title}</Text>
         <Text size="xs" c="dimmed" maw={340}>{detail}</Text>
       </Stack>
@@ -173,14 +172,71 @@ const chartCssColor = (color: string): string => color.startsWith("var(")
 
 const commonXAxisProps = { minTickGap: 28, tickMargin: 10 }
 const commonYAxisProps = { width: 48 }
-const commonTooltipProps = { offset: 16 }
+const commonTooltipProps = { offset: 16, isAnimationActive: false }
+const unmeasuredTooltipHeight = 192
+
+function useTrackedChartTooltip() {
+  const [tooltipY, setTooltipY] = useState<number | null>(null)
+  const pointerActive = useRef(false)
+
+  const placeTooltip = (target: HTMLElement, pointerY: number, tooltipHeight: number) => {
+    const bounds = target.getBoundingClientRect()
+    const below = pointerY + commonTooltipProps.offset
+    const nextY = Math.round(
+      below + tooltipHeight + commonTooltipProps.offset > bounds.height
+        ? Math.max(commonTooltipProps.offset, pointerY - tooltipHeight - commonTooltipProps.offset)
+        : below
+    )
+
+    setTooltipY((current) => current === nextY ? current : nextY)
+  }
+
+  const measureTooltip = (target: HTMLElement) => {
+    const tooltip = target.querySelector<HTMLElement>(".recharts-tooltip-wrapper")
+    return tooltip && getComputedStyle(tooltip).visibility !== "hidden" ? tooltip.offsetHeight : 0
+  }
+
+  const onPointerMove = (event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === "touch") return
+
+    pointerActive.current = true
+    const target = event.currentTarget
+    const bounds = target.getBoundingClientRect()
+    const pointerY = event.clientY - bounds.top
+    const tooltipHeight = measureTooltip(target)
+
+    placeTooltip(target, pointerY, tooltipHeight || unmeasuredTooltipHeight)
+
+    if (tooltipHeight === 0) {
+      requestAnimationFrame(() => {
+        if (!pointerActive.current || !target.isConnected) return
+        const measuredHeight = measureTooltip(target)
+        if (measuredHeight > 0) placeTooltip(target, pointerY, measuredHeight)
+      })
+    }
+  }
+
+  return {
+    trackingProps: {
+      onPointerMove,
+      onPointerLeave: () => {
+        pointerActive.current = false
+        setTooltipY(null)
+      }
+    },
+    tooltipProps: {
+      ...commonTooltipProps,
+      position: tooltipY === null ? undefined : { y: tooltipY }
+    }
+  }
+}
 
 const trendMetrics = {
   tokens: {
     label: "Tokens",
     detail: "Daily token volume",
     key: "tokens",
-    color: "var(--koliko-chart-sand)",
+    color: "var(--koliko-chart-teal)",
     type: "bar",
     format: (value: number) => compactNumber.format(value)
   },
@@ -188,7 +244,7 @@ const trendMetrics = {
     label: "Cost",
     detail: "Provider-reported spend",
     key: "cost",
-    color: "var(--koliko-chart-accent)",
+    color: "var(--koliko-chart-orange)",
     type: "area",
     format: (value: number) => summaryMoney.format(value)
   },
@@ -196,7 +252,7 @@ const trendMetrics = {
     label: "Sessions",
     detail: "Distinct daily runs",
     key: "sessions",
-    color: "var(--koliko-chart-gold)",
+    color: "var(--koliko-chart-sage)",
     type: "bar",
     format: (value: number) => integer.format(value)
   },
@@ -204,7 +260,7 @@ const trendMetrics = {
     label: "Agent time",
     detail: "Tracked active runtime",
     key: "trackedMs",
-    color: "var(--koliko-chart-taupe)",
+    color: "var(--koliko-chart-cocoa)",
     type: "area",
     format: formatDuration
   }
@@ -217,6 +273,7 @@ function TrendExplorer({ daily }: { readonly daily: DashboardResponse["daily"] }
   const config = trendMetrics[metric]
   const data = dailyChartData(daily).map((day) => ({ label: day.label, value: day[config.key] }))
   const total = data.reduce((sum, day) => sum + day.value, 0)
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel
@@ -236,9 +293,9 @@ function TrendExplorer({ daily }: { readonly daily: DashboardResponse["daily"] }
       {!hasValues(data, ["value"]) ? (
         <ChartEmpty icon={<ChartLineUpIcon />} title="No trend data" detail="Usage trends will appear after your collector sends events." />
       ) : (
-        <Box className="analytics-chart-wrap">
+        <Box className="analytics-chart-wrap" {...trackingProps}>
           <CompositeChart
-            h={230}
+            h={270}
             data={data}
             dataKey="label"
             series={[{ name: "value", label: config.label, color: config.color, type: config.type }]}
@@ -251,11 +308,12 @@ function TrendExplorer({ daily }: { readonly daily: DashboardResponse["daily"] }
             withDots={false}
             xAxisProps={commonXAxisProps}
             yAxisProps={{ ...commonYAxisProps, tickFormatter: config.format }}
-            tooltipProps={commonTooltipProps}
+            tooltipProps={tooltipProps}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
             areaProps={{ fillOpacity: 0.16, isAnimationActive: false }}
             lineProps={{ isAnimationActive: false }}
             className="analytics-chart"
+            role="img"
             aria-label={`${config.label} trend chart`}
           />
         </Box>
@@ -268,6 +326,7 @@ function ModelMix({ rows, valueKey = "tokens" }: { readonly rows: DashboardRespo
   const data = rankedBreakdown(rows, valueKey, 5)
   const total = data.reduce((sum, item) => sum + item.value, 0)
   const formatter = valueKey === "cost" ? (value: number) => summaryMoney.format(value) : (value: number) => compactNumber.format(value)
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel title="Model mix" detail={`${valueKey === "cost" ? "Spend" : "Token"} share by model`}>
@@ -275,7 +334,7 @@ function ModelMix({ rows, valueKey = "tokens" }: { readonly rows: DashboardRespo
         <ChartEmpty icon={<CoinsIcon />} title="No model usage" detail="Model distribution will appear when usage is collected." />
       ) : (
         <Box className="donut-breakdown">
-          <Center>
+          <Center {...trackingProps}>
             <DonutChart
               data={data}
               size={144}
@@ -287,8 +346,9 @@ function ModelMix({ rows, valueKey = "tokens" }: { readonly rows: DashboardRespo
               tooltipDataSource="segment"
               valueFormatter={formatter}
               pieProps={{ isAnimationActive: false }}
-              tooltipProps={commonTooltipProps}
+              tooltipProps={tooltipProps}
               className="analytics-chart donut-chart"
+              role="img"
               aria-label={`Model distribution by ${valueKey}`}
             />
           </Center>
@@ -316,7 +376,7 @@ function RepositoryBars({ rows }: { readonly rows: DashboardResponse["repositori
     .filter((row) => row.tokens > 0)
     .sort((left, right) => right.tokens - left.tokens)
     .slice(0, 8)
-    .map((row) => ({ name: row.label, value: row.tokens, color: "var(--koliko-chart-sand)" }))
+    .map((row) => ({ name: row.label, value: row.tokens, color: "var(--koliko-chart-zinc)" }))
 
   return (
     <ChartPanel title="Repository volume" detail="Top folders by tokens">
@@ -333,6 +393,7 @@ function RepositoryBars({ rows }: { readonly rows: DashboardResponse["repositori
             barGap="xs"
             variant="filled"
             autoContrast
+            barTextColor="light-dark(var(--ds-paper), #21140f)"
           />
         </Box>
       )}
@@ -356,23 +417,24 @@ export function OverviewCharts({ dashboard }: { readonly dashboard: DashboardRes
 function TokenComposition({ daily }: { readonly daily: DashboardResponse["daily"] }) {
   const data = dailyChartData(daily)
   const keys = ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"]
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel title="Token composition" detail="Input, output, and cache volume" className="analytics-primary-panel">
       {!hasValues(data, keys) ? (
         <ChartEmpty icon={<CoinsIcon />} title="No token data" detail="Token composition will appear when usage events are collected." />
       ) : (
-        <Box className="analytics-chart-wrap">
+        <Box className="analytics-chart-wrap" {...trackingProps}>
           <BarChart
             h={270}
             data={data}
             dataKey="label"
             type="stacked"
             series={[
-              { name: "inputTokens", label: "Input", color: "var(--koliko-chart-sand)" },
-              { name: "outputTokens", label: "Output", color: "var(--koliko-chart-accent)" },
-              { name: "cacheReadTokens", label: "Cache read", color: "var(--koliko-chart-gold)" },
-              { name: "cacheWriteTokens", label: "Cache write", color: "var(--koliko-chart-taupe)" }
+              { name: "inputTokens", label: "Input", color: "var(--koliko-chart-cocoa)" },
+              { name: "outputTokens", label: "Output", color: "var(--koliko-chart-sky)" },
+              { name: "cacheReadTokens", label: "Cache read", color: "var(--koliko-chart-sage)" },
+              { name: "cacheWriteTokens", label: "Cache write", color: "var(--koliko-chart-secondary)" }
             ]}
             valueFormatter={(value) => compactNumber.format(value)}
             withLegend
@@ -383,13 +445,14 @@ function TokenComposition({ daily }: { readonly daily: DashboardResponse["daily"
             gridAxis="y"
             xAxisProps={commonXAxisProps}
             yAxisProps={{ ...commonYAxisProps, tickFormatter: (value: number) => compactNumber.format(value) }}
-            tooltipProps={commonTooltipProps}
+            tooltipProps={tooltipProps}
             barProps={(series) => ({
               radius: series.name === "cacheWriteTokens" ? [3, 3, 0, 0] : 0,
               isAnimationActive: false
             })}
             legendProps={{ verticalAlign: "bottom", height: 52 }}
             className="analytics-chart"
+            role="img"
             aria-label="Stacked daily token composition chart"
           />
         </Box>
@@ -438,6 +501,7 @@ function ActivityHeatmap({
             getTooltipLabel={({ date, value }) => `${formatDate(date)} · ${integer.format(value ?? 0)} sessions`}
             tooltipProps={{ offset: 10 }}
             className="analytics-heatmap"
+            role="img"
             aria-label="Daily session activity heatmap"
           />
         </ScrollArea>
@@ -454,7 +518,7 @@ function ThinkingBreakdown({ rows }: { readonly rows: DashboardResponse["thinkin
     .map((row) => ({
       name: row.label,
       value: total === 0 ? 0 : row.tokens / total * 100,
-      color: "var(--koliko-chart-caramel)"
+      color: "var(--koliko-chart-cocoa)"
     }))
 
   return (
@@ -472,6 +536,7 @@ function ThinkingBreakdown({ rows }: { readonly rows: DashboardResponse["thinkin
             barGap="xs"
             variant="filled"
             autoContrast
+            barTextColor="var(--ds-panel-text)"
           />
         </Box>
       )}
@@ -485,20 +550,21 @@ function CostTrend({ daily }: { readonly daily: DashboardResponse["daily"] }) {
     cumulative += day.cost
     return { label: day.label, dailyCost: day.cost, cumulativeCost: cumulative }
   })
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel title="Cost trajectory" detail={`Cumulative ${summaryMoney.format(cumulative)}`} className="analytics-primary-panel">
       {!hasValues(data, ["dailyCost"]) ? (
         <ChartEmpty icon={<CurrencyDollarIcon />} title="No cost data" detail="Provider-reported cost will appear when usage events include pricing." />
       ) : (
-        <Box className="analytics-chart-wrap">
+        <Box className="analytics-chart-wrap" {...trackingProps}>
           <CompositeChart
             h={270}
             data={data}
             dataKey="label"
             series={[
-              { name: "dailyCost", label: "Daily", color: "var(--koliko-chart-sand)", type: "bar", yAxisId: "left" },
-              { name: "cumulativeCost", label: "Cumulative", color: "var(--koliko-chart-accent)", type: "line", yAxisId: "right" }
+              { name: "dailyCost", label: "Daily", color: "var(--koliko-chart-orange)", type: "bar", yAxisId: "left" },
+              { name: "cumulativeCost", label: "Cumulative", color: "var(--koliko-chart-sky)", type: "line", yAxisId: "right" }
             ]}
             withLegend
             withRightYAxis
@@ -512,11 +578,12 @@ function CostTrend({ daily }: { readonly daily: DashboardResponse["daily"] }) {
             xAxisProps={commonXAxisProps}
             yAxisProps={{ ...commonYAxisProps, yAxisId: "left", tickFormatter: (value: number) => summaryMoney.format(value) }}
             rightYAxisProps={{ width: 54, yAxisId: "right", tickFormatter: (value: number) => summaryMoney.format(value) }}
-            tooltipProps={commonTooltipProps}
+            tooltipProps={tooltipProps}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
             lineProps={{ isAnimationActive: false }}
             legendProps={{ verticalAlign: "bottom", height: 34 }}
             className="analytics-chart"
+            role="img"
             aria-label="Daily cost bars with cumulative cost line"
           />
         </Box>
@@ -530,7 +597,7 @@ function RepositoryCostBars({ rows }: { readonly rows: DashboardResponse["reposi
     .filter((row) => row.cost > 0)
     .sort((left, right) => right.cost - left.cost)
     .slice(0, 10)
-    .map((row) => ({ name: row.label, value: row.cost, color: "var(--koliko-chart-sand)" }))
+    .map((row) => ({ name: row.label, value: row.cost, color: "var(--koliko-chart-orange)" }))
 
   return (
     <ChartPanel title="Repository spend" detail="Highest-cost folders">
@@ -547,6 +614,7 @@ function RepositoryCostBars({ rows }: { readonly rows: DashboardResponse["reposi
             barGap="xs"
             variant="filled"
             autoContrast
+            barTextColor="var(--ds-on-accent)"
           />
         </Box>
       )}
@@ -590,20 +658,21 @@ function ToolPerformance({ tools }: { readonly tools: DashboardResponse["tools"]
       "Error %": tool.errors / tool.calls * 100
     }))
   const errorCeiling = Math.max(2, Math.ceil(Math.max(...data.map((tool) => tool["Error %"]), 0)))
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel title="Tool reliability" detail="Call volume and error rate" className="analytics-primary-panel">
       {data.length === 0 ? (
         <ChartEmpty icon={<WrenchIcon />} title="No tool calls" detail="Tool reliability will appear when agent runs execute tools." />
       ) : (
-        <Box className="analytics-chart-wrap">
+        <Box className="analytics-chart-wrap" {...trackingProps}>
           <CompositeChart
             h={280}
             data={data}
             dataKey="tool"
             series={[
-              { name: "Calls", color: "var(--koliko-chart-ochre)", type: "bar", yAxisId: "left" },
-              { name: "Error %", label: "Error rate", color: "red.6", type: "line", yAxisId: "right" }
+              { name: "Calls", color: "var(--koliko-chart-sage)", type: "bar", yAxisId: "left" },
+              { name: "Error %", label: "Error rate", color: "rust.6", type: "line", yAxisId: "right" }
             ]}
             withLegend
             withRightYAxis
@@ -617,11 +686,12 @@ function ToolPerformance({ tools }: { readonly tools: DashboardResponse["tools"]
             xAxisProps={{ minTickGap: 12, tickMargin: 10 }}
             yAxisProps={{ width: 44, yAxisId: "left", allowDecimals: false }}
             rightYAxisProps={{ width: 46, yAxisId: "right", domain: [0, errorCeiling], tickFormatter: (value: number) => `${value}%` }}
-            tooltipProps={{ ...commonTooltipProps, content: (props) => <ToolPerformanceTooltip {...props} /> }}
+            tooltipProps={{ ...tooltipProps, content: (props) => <ToolPerformanceTooltip {...props} /> }}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
             lineProps={{ isAnimationActive: false }}
             legendProps={{ verticalAlign: "bottom", height: 34 }}
             className="analytics-chart"
+            role="img"
             aria-label="Tool call volume and error rate composite chart"
           />
         </Box>
@@ -636,7 +706,7 @@ function ToolDurationBars({ tools }: { readonly tools: DashboardResponse["tools"
     .map((tool) => ({ name: tool.name, value: tool.durationMs / tool.calls }))
     .sort((left, right) => right.value - left.value)
     .slice(0, 10)
-    .map((tool) => ({ ...tool, color: "var(--koliko-chart-caramel)" }))
+    .map((tool) => ({ ...tool, color: "var(--koliko-chart-cocoa)" }))
 
   return (
     <ChartPanel title="Average tool duration" detail="Slowest tools per call">
@@ -653,6 +723,7 @@ function ToolDurationBars({ tools }: { readonly tools: DashboardResponse["tools"
             barGap="xs"
             variant="filled"
             autoContrast
+            barTextColor="var(--ds-panel-text)"
           />
         </Box>
       )}
@@ -693,19 +764,20 @@ function SessionBubble({ sessions }: { readonly sessions: DashboardResponse["ses
       repository: session.repository,
       endedAt: session.endedAt
     }))
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel title="Session efficiency" detail="Tokens × runtime · bubble size is cost" className="analytics-primary-panel">
       {data.length === 0 ? (
         <ChartEmpty icon={<ListBulletsIcon />} title="No session metrics" detail="Session relationships will appear after complete runs are collected." />
       ) : (
-        <Box className="analytics-chart-wrap bubble-chart-wrap">
+        <Box className="analytics-chart-wrap bubble-chart-wrap" {...trackingProps}>
           <BubbleChart
             h={320}
             data={data}
             dataKey={{ x: "tokens", y: "runtimeMinutes", z: "cost" }}
             range={[28, 240]}
-            color="var(--koliko-chart-taupe)"
+            color="var(--koliko-chart-sky)"
             valueFormatter={(value) => summaryMoney.format(value)}
             xAxisProps={{
               type: "number",
@@ -729,9 +801,10 @@ function SessionBubble({ sessions }: { readonly sessions: DashboardResponse["ses
               label: { value: "Runtime (min)", angle: -90, position: "insideLeft" }
             }}
             zAxisProps={{ name: "Cost" }}
-            tooltipProps={{ ...commonTooltipProps, content: (props) => <SessionBubbleTooltip {...props} /> }}
-            scatterProps={{ isAnimationActive: false, fillOpacity: 0.78, stroke: "var(--koliko-chart-caramel)", strokeWidth: 1 }}
+            tooltipProps={{ ...tooltipProps, content: (props) => <SessionBubbleTooltip {...props} /> }}
+            scatterProps={{ isAnimationActive: false, fillOpacity: 0.78, stroke: "var(--koliko-chart-cocoa)", strokeWidth: 1 }}
             className="analytics-chart"
+            role="img"
             aria-label="Session token, runtime, and cost bubble chart"
           />
         </Box>
@@ -748,7 +821,7 @@ function SessionCostBars({ sessions }: { readonly sessions: DashboardResponse["s
     .map((session) => ({
       name: `${session.repository} · ${new Date(session.endedAt).toLocaleDateString("en", { month: "short", day: "numeric" })}`,
       value: session.cost,
-      color: "var(--koliko-chart-sand)"
+      color: "var(--koliko-chart-orange)"
     }))
 
   return (
@@ -766,6 +839,7 @@ function SessionCostBars({ sessions }: { readonly sessions: DashboardResponse["s
             barGap="xs"
             variant="filled"
             autoContrast
+            barTextColor="var(--ds-on-accent)"
           />
         </Box>
       )}
@@ -776,22 +850,23 @@ function SessionCostBars({ sessions }: { readonly sessions: DashboardResponse["s
 function FeatureTrend({ daily }: { readonly daily: DashboardResponse["daily"] }) {
   const data = dailyChartData(daily)
   const keys = ["compactions", "goals", "subagents"]
+  const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
     <ChartPanel title="Feature activity" detail="Lifecycle events by day" className="analytics-primary-panel">
       {!hasValues(data, keys) ? (
         <ChartEmpty icon={<SparkleIcon />} title="No feature events" detail="Compactions, goals, and delegation will appear as agents use them." />
       ) : (
-        <Box className="analytics-chart-wrap">
+        <Box className="analytics-chart-wrap" {...trackingProps}>
           <BarChart
             h={260}
             data={data}
             dataKey="label"
             type="stacked"
             series={[
-              { name: "compactions", label: "Compactions", color: "var(--koliko-chart-gold)" },
-              { name: "goals", label: "Goals", color: "var(--koliko-chart-accent)" },
-              { name: "subagents", label: "Sub-agents", color: "var(--koliko-chart-taupe)" }
+              { name: "compactions", label: "Compactions", color: "var(--koliko-chart-secondary)" },
+              { name: "goals", label: "Goals", color: "var(--koliko-chart-orange)" },
+              { name: "subagents", label: "Sub-agents", color: "var(--koliko-chart-sky)" }
             ]}
             withLegend
             maxBarWidth={20}
@@ -800,10 +875,11 @@ function FeatureTrend({ daily }: { readonly daily: DashboardResponse["daily"] })
             gridAxis="y"
             xAxisProps={commonXAxisProps}
             yAxisProps={{ width: 36, allowDecimals: false }}
-            tooltipProps={commonTooltipProps}
+            tooltipProps={tooltipProps}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
             legendProps={{ verticalAlign: "bottom", height: 34 }}
             className="analytics-chart"
+            role="img"
             aria-label="Daily feature lifecycle stacked bar chart"
           />
         </Box>
@@ -822,7 +898,7 @@ function FeatureBreakdown({ features }: { readonly features: DashboardResponse["
           {features.map((feature) => (
             <Group justify="space-between" wrap="nowrap" className="feature-row" key={`${feature.feature}-${feature.label}`}>
               <Group wrap="nowrap" miw={0}>
-                <ThemeIcon variant="light" color={feature.feature === "goal" ? "tangerine" : feature.feature === "subagent" ? "yellow" : "orange"} radius="md">
+                <ThemeIcon variant="light" color={feature.feature === "goal" ? "honey" : feature.feature === "subagent" ? "sky" : "sage"} radius="md">
                   <SparkleIcon />
                 </ThemeIcon>
                 <Box miw={0}>
@@ -830,7 +906,7 @@ function FeatureBreakdown({ features }: { readonly features: DashboardResponse["
                   <Text size="xs" c="dimmed" truncate>{feature.feature} · {feature.detail}</Text>
                 </Box>
               </Group>
-              <Badge variant="light" color="gray">{integer.format(feature.count)}</Badge>
+              <Badge variant="light" color="sage">{integer.format(feature.count)}</Badge>
             </Group>
           ))}
         </Stack>
@@ -890,20 +966,27 @@ function FeaturesAnalytics({ dashboard }: { readonly dashboard: DashboardRespons
   )
 }
 
-export function AnalyticsWorkspace({ dashboard }: { readonly dashboard: DashboardResponse | undefined }) {
+export function AnalyticsWorkspace({
+  dashboard,
+  summary
+}: {
+  readonly dashboard: DashboardResponse | undefined
+  readonly summary: ReactNode
+}) {
   const data = dashboard ?? EMPTY_DASHBOARD
 
   return (
-    <Tabs defaultValue="usage" variant="outline" className="analytics-tabs">
-      <ScrollArea type="never" offsetScrollbars>
+    <Tabs defaultValue="usage" className="analytics-tabs">
+      <ScrollArea type="never" className="analytics-tabs-scroll">
         <Tabs.List className="analytics-tabs-list">
           <Tabs.Tab value="usage" leftSection={<CoinsIcon size={15} />}>Usage</Tabs.Tab>
           <Tabs.Tab value="cost" leftSection={<CurrencyDollarIcon size={15} />}>Cost</Tabs.Tab>
           <Tabs.Tab value="tools" leftSection={<WrenchIcon size={15} />}>Tools</Tabs.Tab>
-          <Tabs.Tab value="sessions" leftSection={<ListBulletsIcon size={15} />}>Sessions</Tabs.Tab>
+          <Tabs.Tab value="sessions" leftSection={<ListBulletsIcon size={15} />}>Session analytics</Tabs.Tab>
           <Tabs.Tab value="features" leftSection={<SparkleIcon size={15} />}>Features</Tabs.Tab>
         </Tabs.List>
       </ScrollArea>
+      <Box className="analytics-summary">{summary}</Box>
       <Tabs.Panel value="usage" pt="sm"><UsageAnalytics dashboard={data} /></Tabs.Panel>
       <Tabs.Panel value="cost" pt="sm"><CostAnalytics dashboard={data} /></Tabs.Panel>
       <Tabs.Panel value="tools" pt="sm"><ToolsAnalytics dashboard={data} /></Tabs.Panel>

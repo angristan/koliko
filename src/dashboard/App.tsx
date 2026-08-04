@@ -6,9 +6,7 @@ import {
   AppShell,
   Badge,
   Box,
-  Burger,
   Button,
-  Card,
   Center,
   Code,
   CopyButton,
@@ -30,11 +28,12 @@ import {
   ThemeIcon,
   Title,
   Tooltip,
+  UnstyledButton,
   useComputedColorScheme,
   useMantineColorScheme,
   type MantineColor
 } from "@mantine/core"
-import { useDisclosure, useMediaQuery } from "@mantine/hooks"
+import { useMediaQuery } from "@mantine/hooks"
 import {
   ActivityIcon,
   ArrowClockwiseIcon,
@@ -151,7 +150,7 @@ const metricVisuals: Readonly<Record<string, ReactNode>> = {
   "Sub-agent events": <ChatsCircleIcon />
 }
 
-function MetricGrid({
+function InstrumentStrip({
   metrics
 }: {
   readonly metrics: ReadonlyArray<{
@@ -163,33 +162,25 @@ function MetricGrid({
   }>
 }) {
   return (
-    <SimpleGrid
-      cols={{ base: 2, sm: metrics.length }}
-      spacing={{ base: "xs", sm: "sm" }}
-      className="metric-grid"
-    >
-      {metrics.map((metric) => (
-        <Card
-          withBorder
-          radius="sm"
-          padding="xs"
-          className="metric-card"
-          key={metric.label}
-        >
-          <Group justify="space-between" align="center" gap={4} wrap="nowrap">
-            <Text size="xs" fw={600} c="dimmed" className="metric-label" truncate>{metric.label}</Text>
-            <ThemeIcon variant="light" color={metric.color ?? "gray"} radius="sm" size={24} className="metric-icon">
-              {metricVisuals[metric.label] ?? <ActivityIcon />}
-            </ThemeIcon>
-          </Group>
-          <Text className="metric-value" mt={6}>{metric.value}</Text>
-          {metric.detail && <Text size="xs" c="dimmed" mt={1} truncate>{metric.detail}</Text>}
-          {metric.progress !== undefined && (
-            <Progress value={Math.max(0, Math.min(100, metric.progress))} color={metric.color ?? "tangerine"} size={2} radius="xl" mt={5} />
-          )}
-        </Card>
-      ))}
-    </SimpleGrid>
+    <Paper component="section" aria-label="Usage summary" withBorder className="instrument-strip">
+      <Box className="instrument-grid" data-count={metrics.length}>
+        {metrics.map((metric) => (
+          <Box className="instrument-cell" key={metric.label}>
+            <Group justify="space-between" align="center" gap={4} wrap="nowrap">
+              <Text size="xs" fw={600} c="dimmed" className="metric-label" truncate>{metric.label}</Text>
+              <ThemeIcon variant="light" color={metric.color ?? "sky"} radius="sm" size={24} className="metric-icon">
+                {metricVisuals[metric.label] ?? <ActivityIcon />}
+              </ThemeIcon>
+            </Group>
+            <Text className="metric-value" mt={6}>{metric.value}</Text>
+            {metric.detail && <Text size="xs" c="dimmed" mt={1} truncate>{metric.detail}</Text>}
+            {metric.progress !== undefined && (
+              <Progress aria-label={`${metric.label} progress`} value={Math.max(0, Math.min(100, metric.progress))} color={metric.color ?? "sage"} size={3} radius={0} mt={6} />
+            )}
+          </Box>
+        ))}
+      </Box>
+    </Paper>
   )
 }
 
@@ -220,7 +211,7 @@ function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonl
   return (
     <Center className="empty-state">
       <Stack align="center" gap="xs" ta="center">
-        <ThemeIcon size={42} radius="xl" variant="light" color="gray">{icon}</ThemeIcon>
+        <ThemeIcon size={42} radius="md" variant="light" color="sky">{icon}</ThemeIcon>
         <Text size="sm" fw={600}>{title}</Text>
         <Text size="xs" c="dimmed" maw={360}>{detail}</Text>
       </Stack>
@@ -228,7 +219,15 @@ function EmptyState({ icon, title, detail }: { readonly icon: ReactNode; readonl
   )
 }
 
-function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
+function Login({
+  hasPasskey,
+  colorScheme,
+  onToggleColorScheme
+}: {
+  readonly hasPasskey: boolean
+  readonly colorScheme: "light" | "dark"
+  readonly onToggleColorScheme: () => void
+}) {
   const [token, setToken] = useState("")
   const loginMutation = useLoginMutation()
   const registerMutation = useRegisterPasskeyMutation()
@@ -247,7 +246,21 @@ function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
   return (
     <main className="auth-shell">
       <Box className="auth-layout">
-        <Box className="auth-brand"><Brand /></Box>
+        <Group className="auth-brand" justify="space-between" wrap="nowrap">
+          <Brand />
+          <Group gap="xs" wrap="nowrap" className="appearance-controls">
+            <Tooltip label={`Use ${colorScheme === "dark" ? "light" : "dark"} theme`}>
+              <ActionIcon
+                variant="default"
+                size="lg"
+                aria-label={`Use ${colorScheme === "dark" ? "light" : "dark"} theme`}
+                onClick={onToggleColorScheme}
+              >
+                {colorScheme === "dark" ? <SunIcon /> : <MoonIcon />}
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </Group>
         <Paper radius="lg" className="auth-card">
           <Box
             component="form"
@@ -258,7 +271,7 @@ function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
           >
             <Stack gap="lg">
               <Group gap="md" wrap="nowrap" align="flex-start" className="auth-heading">
-                <ThemeIcon size={40} radius="md" variant="light" color="tangerine">
+                <ThemeIcon size={40} radius="md" variant="light" color="honey">
                   {hasPasskey ? <LockKeyIcon size={20} /> : <ShieldCheckIcon size={20} />}
                 </ThemeIcon>
                 <Box>
@@ -271,7 +284,7 @@ function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
                 </Box>
               </Group>
 
-              {error && <Alert color="red" icon={<WarningCircleIcon />} title="Authentication failed">{errorMessage(error, "Authentication failed")}</Alert>}
+              {error && <Alert color="rust" icon={<WarningCircleIcon />} title="Authentication failed">{errorMessage(error, "Authentication failed")}</Alert>}
 
               {!hasPasskey && (
                 <PasswordInput
@@ -288,6 +301,8 @@ function Login({ hasPasskey }: { readonly hasPasskey: boolean }) {
               <Button
                 className="auth-submit"
                 type="submit"
+                variant="filled"
+                color="sage"
                 size="md"
                 loading={busy}
                 disabled={!hasPasskey && token.length === 0}
@@ -335,14 +350,14 @@ function SessionDrawer({
     >
       {pending && <Center mih={240}><Loader type="dots" /></Center>}
       {error !== null && (
-        <Alert color="red" icon={<WarningCircleIcon />} title="Session unavailable">
+        <Alert color="rust" icon={<WarningCircleIcon />} title="Session unavailable">
           <Stack gap="sm">
             <Text size="sm">{errorMessage(error, "Session could not be loaded")}</Text>
             <Button variant="light" onClick={onRetry}>Retry</Button>
           </Stack>
         </Alert>
       )}
-      {detail?.truncated && <Alert color="yellow" mb="md">Showing the latest 500 events.</Alert>}
+      {detail?.truncated && <Alert color="honey" mb="md">Showing the latest 500 events.</Alert>}
       <Stack gap={0} className="event-log">
         {detail?.events.map((event) => (
           <Box className="event-row" key={event.id}>
@@ -356,11 +371,11 @@ function SessionDrawer({
               </Group>
               <Group gap="xs" mt="xs">
                 {event.toolName && <Code>{event.toolName}</Code>}
-                {event.model && <Badge variant="light" color="gray">{event.provider}/{event.model}</Badge>}
-                {event.tokens !== undefined && <Badge variant="light" color="tangerine">{compactNumber.format(event.tokens)} tokens</Badge>}
-                {event.cost !== undefined && <Badge variant="light" color="gray">{money.format(event.cost)}</Badge>}
-                {event.durationMs !== undefined && <Badge variant="light" color="gray">{formatDuration(event.durationMs)}</Badge>}
-                {event.status === "error" && <Badge color="red" variant="light">error</Badge>}
+                {event.model && <Badge variant="light" color="sky">{event.provider}/{event.model}</Badge>}
+                {event.tokens !== undefined && <Badge variant="light" color="sky">{compactNumber.format(event.tokens)} tokens</Badge>}
+                {event.cost !== undefined && <Badge variant="light" color="honey">{money.format(event.cost)}</Badge>}
+                {event.durationMs !== undefined && <Badge variant="light" color="sage">{formatDuration(event.durationMs)}</Badge>}
+                {event.status === "error" && <Badge color="rust" variant="light">error</Badge>}
               </Group>
             </Box>
           </Box>
@@ -401,8 +416,8 @@ function Settings() {
               <Text size="xs" c="dimmed" mt={4}>Create one independently revocable key for each coding-agent collector. Only hashes are stored.</Text>
             </Box>
 
-            {apiKeysQuery.error !== null && <Alert color="red" icon={<WarningCircleIcon />}>{errorMessage(apiKeysQuery.error, "API keys could not be loaded")}</Alert>}
-            {message && <Alert color={createdKey ? "tangerine" : "red"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
+            {apiKeysQuery.error !== null && <Alert color="rust" icon={<WarningCircleIcon />}>{errorMessage(apiKeysQuery.error, "API keys could not be loaded")}</Alert>}
+            {message && <Alert color={createdKey ? "sage" : "rust"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
 
             {createdKey && (
               <Paper withBorder radius="md" p="md" className="created-key">
@@ -410,7 +425,7 @@ function Settings() {
                   <Code className="created-key-value">{createdKey}</Code>
                   <CopyButton value={createdKey} timeout={1600}>
                     {({ copied, copy }) => (
-                      <Button variant="light" color={copied ? "teal" : "tangerine"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
+                      <Button variant="light" color={copied ? "sage" : "sky"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
                         {copied ? "Copied" : "Copy"}
                       </Button>
                     )}
@@ -421,7 +436,7 @@ function Settings() {
 
             <Group align="flex-end" wrap="nowrap" className="key-create">
               <TextInput label="Key name" value={name} onChange={(event) => setName(event.currentTarget.value)} flex={1} />
-              <Button loading={createMutation.isPending} onClick={create} leftSection={<KeyIcon />}>Create key</Button>
+              <Button className="accent-action" variant="filled" color="sage" loading={createMutation.isPending} onClick={create} leftSection={<KeyIcon />}>Create key</Button>
             </Group>
           </Stack>
 
@@ -431,7 +446,7 @@ function Settings() {
             {keys.map((key) => (
               <Group key={key.id} justify="space-between" wrap="nowrap" className="key-row">
                 <Group wrap="nowrap" miw={0}>
-                  <ThemeIcon variant="light" color={key.revokedAt ? "gray" : "tangerine"} radius="md"><KeyIcon /></ThemeIcon>
+                  <ThemeIcon variant="light" color={key.revokedAt ? "gray" : "sky"} radius="md"><KeyIcon /></ThemeIcon>
                   <Box miw={0}>
                     <Group gap="xs">
                       <Text size="sm" fw={600} truncate>{key.name}</Text>
@@ -443,7 +458,7 @@ function Settings() {
                 {!key.revokedAt && (
                   <Button
                     variant="subtle"
-                    color="red"
+                    color="rust"
                     size="compact-sm"
                     loading={revokeMutation.isPending && revokeMutation.variables === key.id}
                     onClick={() => revokeMutation.mutate(key.id, {
@@ -461,7 +476,7 @@ function Settings() {
       <Stack gap="md" className="settings-side">
         <Panel title="Passkeys">
           <Stack p="md" gap="sm">
-            <ThemeIcon size={40} radius="md" variant="light" color="tangerine"><ShieldCheckIcon /></ThemeIcon>
+            <ThemeIcon size={40} radius="md" variant="light" color="sage"><ShieldCheckIcon /></ThemeIcon>
             <Box>
               <Text size="sm" fw={600}>Passwordless security</Text>
               <Text size="xs" c="dimmed" mt={4}>User verification is required for every dashboard sign-in.</Text>
@@ -525,13 +540,13 @@ function Overview({ dashboard, cacheRate, toolSuccess }: {
   const summary = dashboard?.summary
   return (
     <Stack gap="sm">
-      <MetricGrid metrics={[
-        { label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns`, color: "tangerine" },
-        { label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime", color: "yellow" },
-        { label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output`, color: "tangerine" },
-        { label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported", color: "orange" },
-        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "yellow" },
-        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100, color: "teal" }
+      <InstrumentStrip metrics={[
+        { label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns`, color: "sky" },
+        { label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime", color: "sage" },
+        { label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output`, color: "sky" },
+        { label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported", color: "honey" },
+        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "sky" },
+        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100, color: "sage" }
       ]} />
       <Suspense fallback={<ChartsFallback />}>
         <OverviewCharts dashboard={dashboard} />
@@ -542,18 +557,19 @@ function Overview({ dashboard, cacheRate, toolSuccess }: {
 
 function Analytics({ dashboard, toolSuccess }: { readonly dashboard: DashboardResponse | undefined; readonly toolSuccess: number }) {
   const summary = dashboard?.summary
+  const summaryStrip = (
+    <InstrumentStrip metrics={[
+      { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful`, progress: toolSuccess * 100, color: "sage" },
+      { label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints", color: "sky" },
+      { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "honey" },
+      { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "sky" }
+    ]} />
+  )
+
   return (
-    <Stack gap="sm">
-      <MetricGrid metrics={[
-        { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful`, progress: toolSuccess * 100, color: "teal" },
-        { label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints", color: "orange" },
-        { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "tangerine" },
-        { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "yellow" }
-      ]} />
-      <Suspense fallback={<ChartsFallback />}>
-        <AnalyticsWorkspace dashboard={dashboard} />
-      </Suspense>
-    </Stack>
+    <Suspense fallback={<ChartsFallback />}>
+      <AnalyticsWorkspace dashboard={dashboard} summary={summaryStrip} />
+    </Suspense>
   )
 }
 
@@ -584,7 +600,7 @@ function Sessions({ dashboard, setSessionId }: {
                 <Table.Tr key={row.id}>
                   <Table.Td>
                     <Group gap="sm" wrap="nowrap">
-                      <ThemeIcon size="sm" variant="light" color="tangerine" radius="sm"><TerminalWindowIcon /></ThemeIcon>
+                      <ThemeIcon size="sm" variant="light" color="sky" radius="sm"><TerminalWindowIcon /></ThemeIcon>
                       <Text size="sm" fw={600}>{row.repository}</Text>
                     </Group>
                   </Table.Td>
@@ -618,10 +634,10 @@ export default function App() {
   const [days, setDays] = useState(30)
   const [sessionId, setSessionId] = useState<string>()
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)
-  const [mobileOpened, mobileNavigation] = useDisclosure(false)
-  const isDesktop = useMediaQuery("(min-width: 48em)")
+  const isDesktop = useMediaQuery("(min-width: 43.75em)")
   const computedColorScheme = useComputedColorScheme("light")
   const { toggleColorScheme } = useMantineColorScheme()
+  const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark"
 
   const range = useMemo(() => rangeForDays(days), [days])
   const authQuery = useQuery(authQueryOptions())
@@ -640,7 +656,7 @@ export default function App() {
   if (authQuery.isError) {
     return (
       <Center mih="100vh">
-        <Alert color="red" icon={<WarningCircleIcon />} title="Koliko could not be loaded">
+        <Alert color="rust" icon={<WarningCircleIcon />} title="Koliko could not be loaded">
           <Stack gap="sm">
             <Text size="sm">{errorMessage(authQuery.error, "Authentication status could not be loaded")}</Text>
             <Button variant="light" onClick={() => void authQuery.refetch()}>Retry</Button>
@@ -649,7 +665,15 @@ export default function App() {
       </Center>
     )
   }
-  if (!authQuery.data.authenticated) return <Login hasPasskey={authQuery.data.hasPasskey} />
+  if (!authQuery.data.authenticated) {
+    return (
+      <Login
+        hasPasskey={authQuery.data.hasPasskey}
+        colorScheme={computedColorScheme}
+        onToggleColorScheme={toggleColorScheme}
+      />
+    )
+  }
 
   const dashboard = dashboardQuery.data
   const summary = dashboard?.summary
@@ -662,68 +686,70 @@ export default function App() {
 
   const navigate = (next: Tab) => {
     setTab(next)
-    mobileNavigation.close()
   }
 
   return (
     <AppShell
       layout="alt"
       header={{ height: 58 }}
-      navbar={{ width: isDesktop && desktopCollapsed ? 56 : 208, breakpoint: "sm", collapsed: { mobile: !mobileOpened } }}
+      navbar={{ width: isDesktop && desktopCollapsed ? 68 : 230, breakpoint: "sm", collapsed: { mobile: true } }}
       padding={0}
+      transitionDuration={260}
+      transitionTimingFunction="cubic-bezier(0.4, 0, 0.2, 1)"
       className="app-shell"
     >
+      <a className="skip-link" href="#dashboard-main">Skip to dashboard content</a>
+
       <AppShell.Header className="app-header">
         <Group h="100%" px={{ base: "md", sm: "lg" }} justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
-            <Burger
-              opened={mobileOpened}
-              onClick={mobileNavigation.toggle}
-              hiddenFrom="sm"
-              size="sm"
-              aria-label={mobileOpened ? "Close navigation" : "Open navigation"}
-            />
-            <Box hiddenFrom="sm"><Brand compact /></Box>
+            <Box hiddenFrom="sm" className="mobile-header-brand"><Brand /></Box>
             <Title order={2} className="page-heading">{page.title}</Title>
           </Group>
 
-          <Group gap="sm" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap" className="header-actions">
             {tab !== "settings" && (
               <>
                 <SegmentedControl
                   size="xs"
                   value={String(days)}
+                  aria-label="Date range"
                   onChange={(value) => setDays(Number(value))}
                   data={[7, 30, 90].map((value) => ({ value: String(value), label: `${value}d` }))}
-                  className="range-control"
+                  className="range-control header-range-control"
                 />
                 <Tooltip label="Refresh dashboard">
-                  <ActionIcon variant="default" size="lg" aria-label="Refresh dashboard" loading={dashboardQuery.isFetching} onClick={() => void dashboardQuery.refetch()}>
+                  <ActionIcon className="header-refresh" variant="default" size="lg" aria-label="Refresh dashboard" loading={dashboardQuery.isFetching} onClick={() => void dashboardQuery.refetch()}>
                     <ArrowClockwiseIcon />
                   </ActionIcon>
                 </Tooltip>
               </>
             )}
-            <Tooltip label={computedColorScheme === "dark" ? "Use light theme" : "Use dark theme"}>
-              <ActionIcon variant="default" size="lg" aria-label="Toggle color theme" onClick={toggleColorScheme}>
-                {computedColorScheme === "dark" ? <SunIcon /> : <MoonIcon />}
-              </ActionIcon>
-            </Tooltip>
+            <Group gap="xs" wrap="nowrap" className="appearance-controls">
+              <Tooltip label={`Use ${nextColorScheme} theme`}>
+                <ActionIcon variant="default" size="lg" aria-label={`Use ${nextColorScheme} theme`} onClick={toggleColorScheme}>
+                  {computedColorScheme === "dark" ? <SunIcon /> : <MoonIcon />}
+                </ActionIcon>
+              </Tooltip>
+            </Group>
           </Group>
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={0} className="app-navbar" data-desktop-collapsed={desktopCollapsed}>
+      <AppShell.Navbar p={0} visibleFrom="sm" className="app-navbar" data-desktop-collapsed={desktopCollapsed}>
         <AppShell.Section className="navbar-brand"><Brand /></AppShell.Section>
-        <AppShell.Section grow component={ScrollArea} className="navbar-navigation">
-          <Stack gap={2}>
+        <AppShell.Section grow component={ScrollArea} scrollbars="y" className="navbar-navigation">
+          <Stack gap={6}>
             {navigation.map((item) => (
               <Tooltip key={item.tab} label={item.label} position="right" disabled={!desktopCollapsed}>
                 <NavLink
+                  component="button"
+                  type="button"
                   label={item.label}
-                  aria-label={item.label}
-                  leftSection={<item.icon size={19} />}
+                  leftSection={<item.icon size={19} weight={tab === item.tab ? "bold" : "regular"} />}
                   active={tab === item.tab}
+                  aria-label={item.label}
+                  aria-current={tab === item.tab ? "page" : undefined}
                   onClick={() => navigate(item.tab)}
                   variant="light"
                   className="nav-item"
@@ -733,46 +759,61 @@ export default function App() {
           </Stack>
         </AppShell.Section>
         <AppShell.Section className="navbar-footer">
-          <Group gap={4} justify="space-between" className="navbar-footer-actions">
-            <Tooltip label="View on GitHub" position="right">
-              <ActionIcon
+          <Stack gap={4} className="navbar-footer-actions">
+            <Tooltip label="View on GitHub" position="right" disabled={!desktopCollapsed}>
+              <UnstyledButton
                 component="a"
                 href="https://github.com/angristan/koliko"
                 target="_blank"
                 rel="noreferrer"
-                variant="subtle"
-                color="gray"
-                size="lg"
+                className="sidebar-footer-action"
                 aria-label="View on GitHub"
               >
-                <GithubLogoIcon size={19} />
-              </ActionIcon>
+                <GithubLogoIcon size={18} />
+                <span>GitHub</span>
+              </UnstyledButton>
             </Tooltip>
-            <Box visibleFrom="sm">
-              <Tooltip label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="right">
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  size="lg"
-                  aria-label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  onClick={() => setDesktopCollapsed((collapsed) => !collapsed)}
-                >
-                  <SidebarSimpleIcon size={19} />
-                </ActionIcon>
-              </Tooltip>
-            </Box>
-          </Group>
+            <Tooltip label="Expand sidebar" position="right" disabled={!desktopCollapsed}>
+              <UnstyledButton
+                className="sidebar-footer-action"
+                aria-label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onClick={() => setDesktopCollapsed((collapsed) => !collapsed)}
+              >
+                <SidebarSimpleIcon size={18} />
+                <span>Collapse sidebar</span>
+              </UnstyledButton>
+            </Tooltip>
+          </Stack>
         </AppShell.Section>
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main id="dashboard-main" tabIndex={-1}>
         <Box className="content-shell">
           <Box className="content-intro">
-            <Title order={1}>{page.title}</Title>
+            <Title order={1} className="content-title">{page.title}</Title>
             <Text c="dimmed" mt={6}>{page.description}</Text>
           </Box>
 
-          {dashboardQuery.error !== null && <Alert color="red" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{errorMessage(dashboardQuery.error, "Dashboard could not be loaded")}</Alert>}
+          {tab !== "settings" && (
+            <Group hiddenFrom="sm" gap="xs" wrap="nowrap" className="mobile-page-toolbar">
+              <SegmentedControl
+                size="xs"
+                value={String(days)}
+                aria-label="Date range"
+                onChange={(value) => setDays(Number(value))}
+                data={[7, 30, 90].map((value) => ({ value: String(value), label: `${value}d` }))}
+                className="range-control mobile-range-control"
+                fullWidth
+              />
+              <Tooltip label="Refresh dashboard">
+                <ActionIcon variant="default" size="md" aria-label="Refresh dashboard" loading={dashboardQuery.isFetching} onClick={() => void dashboardQuery.refetch()}>
+                  <ArrowClockwiseIcon />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          )}
+
+          {dashboardQuery.error !== null && <Alert color="rust" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{errorMessage(dashboardQuery.error, "Dashboard could not be loaded")}</Alert>}
           <Box key={tab} className="page-content">
             {dashboardQuery.isPending && tab !== "settings"
               ? <Center mih={320}><Loader type="dots" /></Center>
@@ -787,6 +828,24 @@ export default function App() {
           </Box>
         </Box>
       </AppShell.Main>
+
+      <Box component="nav" hiddenFrom="sm" className="mobile-bottom-nav" aria-label="Primary navigation">
+        {navigation.map((item) => {
+          const active = tab === item.tab
+          return (
+            <UnstyledButton
+              key={item.tab}
+              className="mobile-bottom-nav-item"
+              data-active={active || undefined}
+              aria-current={active ? "page" : undefined}
+              onClick={() => navigate(item.tab)}
+            >
+              <item.icon size={20} weight={active ? "bold" : "regular"} aria-hidden="true" />
+              <span>{item.label}</span>
+            </UnstyledButton>
+          )
+        })}
+      </Box>
 
       <SessionDrawer
         opened={sessionId !== undefined}
