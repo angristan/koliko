@@ -2,6 +2,7 @@ import { useRef, useState, type PointerEvent, type ReactNode } from "react"
 import {
   Badge,
   Box,
+  Button,
   Center,
   ColorSwatch,
   Divider,
@@ -11,6 +12,7 @@ import {
   SegmentedControl,
   SimpleGrid,
   Stack,
+  Table,
   Tabs,
   Text,
   ThemeIcon
@@ -37,6 +39,7 @@ import {
 import type { TooltipContentProps } from "recharts"
 import { DashboardResponse, SummaryMetrics, type DailyMetric, type UsageBreakdown } from "../shared/api"
 import type { AnalyticsSection, TrendMetric } from "./navigation"
+import { hasCollectedData } from "./presentation"
 
 const compactNumber = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })
 const integer = new Intl.NumberFormat("en")
@@ -89,6 +92,13 @@ const formatDate = (date: string): string => new Date(`${date}T00:00:00Z`).toLoc
   timeZone: "UTC"
 })
 
+const formatLongDate = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString("en", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  timeZone: "UTC"
+})
+
 const formatDuration = (milliseconds: number): string => {
   if (milliseconds < 1_000) return `${Math.round(milliseconds)}ms`
   if (milliseconds < 60_000) return `${(milliseconds / 1_000).toFixed(milliseconds < 10_000 ? 1 : 0)}s`
@@ -136,6 +146,23 @@ function ChartEmpty({ icon, title, detail }: { readonly icon: ReactNode; readonl
         <Text size="xs" c="dimmed" maw={340}>{detail}</Text>
       </Stack>
     </Center>
+  )
+}
+
+function CollectorSetup() {
+  return (
+    <ChartPanel title="Collector setup" detail="First use" className="collector-setup-panel">
+      <Center className="chart-empty">
+        <Stack align="center" gap="sm" ta="center">
+          <ThemeIcon size={38} radius="md" variant="light" color="sage"><ActivityIcon /></ThemeIcon>
+          <Box>
+            <Text size="sm" fw={600}>Connect a collector to start</Text>
+            <Text size="xs" c="dimmed" maw={380} mt={3}>Create a collector key, then add it to your coding agent collector.</Text>
+          </Box>
+          <Button component="a" href="/settings" variant="light" color="sage">Set up collector</Button>
+        </Stack>
+      </Center>
+    </ChartPanel>
   )
 }
 
@@ -273,7 +300,7 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
   readonly onMetricChange: (metric: TrendMetric) => void
 }) {
   const config = trendMetrics[metric]
-  const data = dailyChartData(daily).map((day) => ({ label: day.label, value: day[config.key] }))
+  const data = dailyChartData(daily).map((day) => ({ date: day.date, label: day.label, value: day[config.key] }))
   const total = data.reduce((sum, day) => sum + day.value, 0)
   const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
@@ -295,30 +322,50 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
       {!hasValues(data, ["value"]) ? (
         <ChartEmpty icon={<ChartLineUpIcon />} title="No trend data" detail="Usage trends will appear after your collector sends events." />
       ) : (
-        <Box className="analytics-chart-wrap" {...trackingProps}>
-          <CompositeChart
-            h={270}
-            data={data}
-            dataKey="label"
-            series={[{ name: "value", label: config.label, color: config.color, type: config.type }]}
-            valueFormatter={config.format}
-            maxBarWidth={18}
-            strokeWidth={2}
-            strokeDasharray="0"
-            tickLine="none"
-            gridAxis="y"
-            withDots={false}
-            xAxisProps={commonXAxisProps}
-            yAxisProps={{ ...commonYAxisProps, tickFormatter: config.format }}
-            tooltipProps={tooltipProps}
-            barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
-            areaProps={{ fillOpacity: 0.16, isAnimationActive: false }}
-            lineProps={{ isAnimationActive: false }}
-            className="analytics-chart"
-            role="img"
-            aria-label={`${config.label} trend chart`}
-          />
-        </Box>
+        <>
+          <Box className="analytics-chart-wrap" {...trackingProps}>
+            <CompositeChart
+              h={270}
+              data={data}
+              dataKey="label"
+              series={[{ name: "value", label: config.label, color: config.color, type: config.type }]}
+              valueFormatter={config.format}
+              maxBarWidth={18}
+              strokeWidth={2}
+              strokeDasharray="0"
+              tickLine="none"
+              gridAxis="y"
+              withDots={false}
+              xAxisProps={commonXAxisProps}
+              yAxisProps={{ ...commonYAxisProps, tickFormatter: config.format }}
+              tooltipProps={tooltipProps}
+              barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
+              areaProps={{ fillOpacity: 0.16, isAnimationActive: false }}
+              lineProps={{ isAnimationActive: false }}
+              className="analytics-chart"
+              role="img"
+              aria-label={`${config.label} trend chart`}
+            />
+          </Box>
+          <details className="chart-data-view">
+            <summary>View dates and values</summary>
+            <ScrollArea type="auto" scrollbars="x" offsetScrollbars="x">
+              <Table verticalSpacing="xs" horizontalSpacing="md">
+                <Table.Thead>
+                  <Table.Tr><Table.Th>Date</Table.Th><Table.Th ta="right">{config.label}</Table.Th></Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {data.map((day) => (
+                    <Table.Tr key={day.date}>
+                      <Table.Td>{formatLongDate(day.date)}</Table.Td>
+                      <Table.Td ta="right" className="tabular-value">{config.format(day.value)}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          </details>
+        </>
       )}
     </ChartPanel>
   )
@@ -359,7 +406,7 @@ function ModelMix({ rows, valueKey = "tokens" }: { readonly rows: DashboardRespo
               <Group key={item.name} gap="xs" wrap="nowrap" justify="space-between">
                 <Group gap="xs" wrap="nowrap" miw={0}>
                   <ColorSwatch color={chartCssColor(item.color)} size={9} />
-                  <Text size="xs" truncate>{item.name}</Text>
+                  <Text size="xs" className="breakdown-label" title={item.name}>{item.name}</Text>
                 </Group>
                 <Text size="xs" fw={600} className="tabular-value">
                   {total === 0 ? "0%" : `${(item.value / total * 100).toFixed(1)}%`}
@@ -391,6 +438,9 @@ function RepositoryBars({ rows }: { readonly rows: DashboardResponse["repositori
             barsLabel="Repository"
             valueLabel="Tokens"
             valueFormatter={(value) => compactNumber.format(value)}
+            className="repository-bars"
+            getBarProps={(item) => ({ title: item.name })}
+            renderBar={(item, defaultBar) => <>{defaultBar}<Text size="xs" className="repository-full-label" aria-hidden="true">{item.name}</Text></>}
             barHeight={28}
             barGap="xs"
             variant="filled"
@@ -409,6 +459,8 @@ export function OverviewCharts({ dashboard, metric, onMetricChange }: {
   readonly onMetricChange: (metric: TrendMetric) => void
 }) {
   const data = dashboard
+  if (data && !hasCollectedData(data.summary)) return <CollectorSetup />
+
   return (
     <Stack gap="sm">
       <TrendExplorer daily={data?.daily ?? []} metric={metric} onMetricChange={onMetricChange} />
@@ -616,6 +668,9 @@ function RepositoryCostBars({ rows }: { readonly rows: DashboardResponse["reposi
             barsLabel="Repository"
             valueLabel="Cost"
             valueFormatter={(value) => summaryMoney.format(value)}
+            className="repository-bars"
+            getBarProps={(item) => ({ title: item.name })}
+            renderBar={(item, defaultBar) => <>{defaultBar}<Text size="xs" className="repository-full-label" aria-hidden="true">{item.name}</Text></>}
             barHeight={28}
             barGap="xs"
             variant="filled"
@@ -984,6 +1039,7 @@ export function AnalyticsWorkspace({
   readonly onSectionChange: (section: AnalyticsSection) => void
 }) {
   const data = dashboard ?? EMPTY_DASHBOARD
+  const firstUse = dashboard !== undefined && !hasCollectedData(dashboard.summary)
 
   return (
     <Tabs
@@ -991,21 +1047,33 @@ export function AnalyticsWorkspace({
       onChange={(value) => value && onSectionChange(value as AnalyticsSection)}
       className="analytics-tabs"
     >
-      <ScrollArea type="never" className="analytics-tabs-scroll">
-        <Tabs.List className="analytics-tabs-list">
-          <Tabs.Tab value="usage" leftSection={<CoinsIcon size={15} />}>Usage</Tabs.Tab>
-          <Tabs.Tab value="cost" leftSection={<CurrencyDollarIcon size={15} />}>Cost</Tabs.Tab>
-          <Tabs.Tab value="tools" leftSection={<WrenchIcon size={15} />}>Tools</Tabs.Tab>
-          <Tabs.Tab value="sessions" leftSection={<ListBulletsIcon size={15} />}>Session analytics</Tabs.Tab>
-          <Tabs.Tab value="features" leftSection={<SparkleIcon size={15} />}>Features</Tabs.Tab>
-        </Tabs.List>
-      </ScrollArea>
+      <Box className="analytics-tabs-scroll-shell">
+        <ScrollArea
+          type="auto"
+          scrollbars="x"
+          offsetScrollbars="x"
+          className="analytics-tabs-scroll"
+          viewportProps={{ tabIndex: 0, role: "region", "aria-label": "Scrollable analytics sections" }}
+        >
+          <Tabs.List className="analytics-tabs-list">
+            <Tabs.Tab value="usage" leftSection={<CoinsIcon size={15} />}>Usage</Tabs.Tab>
+            <Tabs.Tab value="cost" leftSection={<CurrencyDollarIcon size={15} />}>Cost</Tabs.Tab>
+            <Tabs.Tab value="tools" leftSection={<WrenchIcon size={15} />}>Tools</Tabs.Tab>
+            <Tabs.Tab value="sessions" leftSection={<ListBulletsIcon size={15} />}>Session analytics</Tabs.Tab>
+            <Tabs.Tab value="features" leftSection={<SparkleIcon size={15} />}>Features</Tabs.Tab>
+          </Tabs.List>
+        </ScrollArea>
+      </Box>
       <Box className="analytics-summary">{summary}</Box>
-      <Tabs.Panel value="usage" pt="sm"><UsageAnalytics dashboard={data} /></Tabs.Panel>
-      <Tabs.Panel value="cost" pt="sm"><CostAnalytics dashboard={data} /></Tabs.Panel>
-      <Tabs.Panel value="tools" pt="sm"><ToolsAnalytics dashboard={data} /></Tabs.Panel>
-      <Tabs.Panel value="sessions" pt="sm"><SessionsAnalytics dashboard={data} /></Tabs.Panel>
-      <Tabs.Panel value="features" pt="sm"><FeaturesAnalytics dashboard={data} /></Tabs.Panel>
+      {firstUse ? <Tabs.Panel value={section} pt="sm"><CollectorSetup /></Tabs.Panel> : (
+        <>
+          <Tabs.Panel value="usage" pt="sm"><UsageAnalytics dashboard={data} /></Tabs.Panel>
+          <Tabs.Panel value="cost" pt="sm"><CostAnalytics dashboard={data} /></Tabs.Panel>
+          <Tabs.Panel value="tools" pt="sm"><ToolsAnalytics dashboard={data} /></Tabs.Panel>
+          <Tabs.Panel value="sessions" pt="sm"><SessionsAnalytics dashboard={data} /></Tabs.Panel>
+          <Tabs.Panel value="features" pt="sm"><FeaturesAnalytics dashboard={data} /></Tabs.Panel>
+        </>
+      )}
     </Tabs>
   )
 }

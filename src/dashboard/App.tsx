@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type MouseEvent, type ReactNode } from "react"
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   ActionIcon,
@@ -39,12 +39,8 @@ import {
   ArrowClockwiseIcon,
   ArrowRightIcon,
   ChartLineUpIcon,
-  ChatsCircleIcon,
   CheckCircleIcon,
-  CoinsIcon,
   CopyIcon,
-  CurrencyDollarIcon,
-  DatabaseIcon,
   GearSixIcon,
   GithubLogoIcon,
   KeyIcon,
@@ -56,11 +52,9 @@ import {
   SignOutIcon,
   SunIcon,
   TerminalWindowIcon,
-  TimerIcon,
-  WarningCircleIcon,
-  WrenchIcon
+  WarningCircleIcon
 } from "@phosphor-icons/react"
-import type { DashboardResponse, PasskeySummary, SessionDetailResponse } from "../shared/api"
+import type { ApiKeySummary, DashboardResponse, PasskeySummary, SessionDetailResponse } from "../shared/api"
 import {
   apiKeysQueryOptions,
   authQueryOptions,
@@ -82,6 +76,12 @@ import {
   type DashboardTab,
   type TrendMetric
 } from "./navigation"
+import {
+  apiKeyRevocationMessage,
+  loadingRangeMessage,
+  retainedRangeMessage,
+  toolSuccessPresentation
+} from "./presentation"
 
 const isoDate = (date: Date): string => date.toISOString().slice(0, 10)
 const rangeForDays = (days: number) => ({
@@ -145,23 +145,11 @@ function Brand({ compact = false }: { readonly compact?: boolean }) {
   )
 }
 
-const metricVisuals: Readonly<Record<string, ReactNode>> = {
-  Sessions: <ChatsCircleIcon />,
-  "Agent time": <TimerIcon />,
-  Tokens: <CoinsIcon />,
-  Cost: <CurrencyDollarIcon />,
-  "Cache read": <DatabaseIcon />,
-  "Tool success": <WrenchIcon />,
-  "Tool calls": <WrenchIcon />,
-  Compactions: <DatabaseIcon />,
-  "Goal events": <ActivityIcon />,
-  "Sub-agent events": <ChatsCircleIcon />
-}
-
 function InstrumentStrip({
   metrics
 }: {
   readonly metrics: ReadonlyArray<{
+    readonly group: string
     readonly label: string
     readonly value: string
     readonly detail?: string
@@ -169,22 +157,31 @@ function InstrumentStrip({
     readonly color?: MantineColor
   }>
 }) {
+  const groups = metrics.reduce<Array<{ label: string; metrics: Array<(typeof metrics)[number]> }>>((result, metric) => {
+    const current = result.at(-1)
+    if (current?.label === metric.group) current.metrics.push(metric)
+    else result.push({ label: metric.group, metrics: [metric] })
+    return result
+  }, [])
+
   return (
     <Paper component="section" aria-label="Usage summary" withBorder className="instrument-strip">
-      <Box className="instrument-grid" data-count={metrics.length}>
-        {metrics.map((metric) => (
-          <Box className="instrument-cell" key={metric.label}>
-            <Group justify="space-between" align="center" gap={4} wrap="nowrap">
-              <Text size="xs" fw={600} c="dimmed" className="metric-label" truncate>{metric.label}</Text>
-              <ThemeIcon variant="light" color={metric.color ?? "sky"} radius="sm" size={24} className="metric-icon">
-                {metricVisuals[metric.label] ?? <ActivityIcon />}
-              </ThemeIcon>
-            </Group>
-            <Text className="metric-value" mt={6}>{metric.value}</Text>
-            {metric.detail && <Text size="xs" c="dimmed" mt={1} truncate>{metric.detail}</Text>}
-            {metric.progress !== undefined && (
-              <Progress aria-label={`${metric.label} progress`} value={Math.max(0, Math.min(100, metric.progress))} color={metric.color ?? "sage"} size={3} radius={0} mt={6} />
-            )}
+      <Box className="instrument-grid" data-count={groups.length}>
+        {groups.map((group) => (
+          <Box className="instrument-group" key={group.label}>
+            <Text className="instrument-group-label">{group.label}</Text>
+            <Box className="instrument-group-grid" style={{ gridTemplateColumns: `repeat(${group.metrics.length}, minmax(0, 1fr))` }}>
+              {group.metrics.map((metric) => (
+                <Box className="instrument-cell" key={metric.label}>
+                  <Text size="xs" fw={600} c="dimmed" className="metric-label" truncate>{metric.label}</Text>
+                  <Text className="metric-value" mt={6}>{metric.value}</Text>
+                  {metric.detail && <Text size="xs" c="dimmed" mt={1}>{metric.detail}</Text>}
+                  {metric.progress !== undefined && (
+                    <Progress aria-label={`${metric.label} progress`} value={Math.max(0, Math.min(100, metric.progress))} color={metric.color ?? "sage"} size={3} radius={0} mt={6} />
+                  )}
+                </Box>
+              ))}
+            </Box>
           </Box>
         ))}
       </Box>
@@ -359,6 +356,7 @@ function SessionDrawer({
       onClose={onClose}
       position="right"
       size="lg"
+      closeButtonProps={{ "aria-label": "Close session details" }}
       title={detail ? (
         <Box>
           <Text fw={700}>{detail.repository}</Text>
@@ -417,6 +415,7 @@ function Settings() {
   const [createdKey, setCreatedKey] = useState<string>()
   const [keyMessage, setKeyMessage] = useState<string>()
   const [passkeyToRemove, setPasskeyToRemove] = useState<PasskeySummary>()
+  const [apiKeyToRevoke, setApiKeyToRevoke] = useState<ApiKeySummary>()
   const keys = apiKeysQuery.data?.keys ?? []
   const passkeys = passkeysQuery.data?.passkeys ?? []
 
@@ -440,6 +439,14 @@ function Settings() {
     if (!passkeyToRemove) return
     removePasskeyMutation.mutate(passkeyToRemove.id, {
       onSuccess: () => setPasskeyToRemove(undefined)
+    })
+  }
+
+  const confirmApiKeyRevocation = () => {
+    if (!apiKeyToRevoke) return
+    revokeMutation.mutate(apiKeyToRevoke.id, {
+      onSuccess: () => setApiKeyToRevoke(undefined),
+      onError: (cause) => setKeyMessage(errorMessage(cause, "API key could not be revoked"))
     })
   }
 
@@ -488,20 +495,18 @@ function Settings() {
             {keys.map((key) => (
               <Group key={key.id} justify="space-between" wrap="nowrap" className="settings-list-row">
                 <Box miw={0}>
-                  <Group gap="xs">
-                    <Text size="sm" fw={600} truncate>{key.name}</Text>
+                  <Group gap="xs" className="settings-resource-heading">
+                    <Text size="sm" fw={600} className="settings-resource-name">{key.name}</Text>
                     {key.revokedAt && <Badge size="xs" variant="light" color="gray">Revoked</Badge>}
                   </Group>
-                  <Text size="xs" c="dimmed" truncate>{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</Text>
+                  <Text size="xs" c="dimmed" className="settings-resource-meta">{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</Text>
                 </Box>
                 {!key.revokedAt && (
                   <Button
                     variant="light"
                     color="rust"
                     loading={revokeMutation.isPending && revokeMutation.variables === key.id}
-                    onClick={() => revokeMutation.mutate(key.id, {
-                      onError: (cause) => setKeyMessage(errorMessage(cause, "API key could not be revoked"))
-                    })}
+                    onClick={() => setApiKeyToRevoke(key)}
                   >Revoke</Button>
                 )}
               </Group>
@@ -545,8 +550,8 @@ function Settings() {
             {passkeys.map((passkey) => (
               <Group key={passkey.id} justify="space-between" wrap="nowrap" className="settings-list-row">
                 <Box miw={0}>
-                  <Text size="sm" fw={600} truncate>{passkey.name}</Text>
-                  <Text size="xs" c="dimmed" truncate>
+                  <Text size="sm" fw={600} className="settings-resource-name">{passkey.name}</Text>
+                  <Text size="xs" c="dimmed" className="settings-resource-meta">
                     {passkey.backedUp ? "Synced" : passkey.deviceType === "multiDevice" ? "Multi-device" : "Device-bound"}
                     {` · added ${new Date(passkey.createdAt).toLocaleDateString()}`}
                     {passkey.lastUsedAt ? ` · last used ${new Date(passkey.lastUsedAt).toLocaleDateString()}` : " · never used"}
@@ -578,10 +583,29 @@ function Settings() {
       </Stack>
 
       <Modal
+        opened={apiKeyToRevoke !== undefined}
+        onClose={() => setApiKeyToRevoke(undefined)}
+        title="Revoke collector key?"
+        closeButtonProps={{ "aria-label": "Close collector key revocation" }}
+        centered
+        returnFocus
+      >
+        <Stack gap="md">
+          <Text size="sm">{apiKeyToRevoke ? apiKeyRevocationMessage(apiKeyToRevoke.name) : "Ingestion from this collector will stop."}</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setApiKeyToRevoke(undefined)}>Cancel</Button>
+            <Button color="rust" loading={revokeMutation.isPending} onClick={confirmApiKeyRevocation}>Revoke key</Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={passkeyToRemove !== undefined}
         onClose={() => setPasskeyToRemove(undefined)}
         title="Remove passkey?"
+        closeButtonProps={{ "aria-label": "Close passkey removal" }}
         centered
+        returnFocus
       >
         <Stack gap="md">
           <Text size="sm">{passkeyToRemove ? `“${passkeyToRemove.name}” will no longer be able to sign in to Koliko.` : "This passkey will no longer be able to sign in to Koliko."}</Text>
@@ -606,7 +630,7 @@ function ChartsFallback() {
 function Overview({ dashboard, cacheRate, toolSuccess, trendMetric, onTrendMetricChange }: {
   readonly dashboard: DashboardResponse | undefined
   readonly cacheRate: number
-  readonly toolSuccess: number
+  readonly toolSuccess: ReturnType<typeof toolSuccessPresentation>
   readonly trendMetric: TrendMetric
   readonly onTrendMetricChange: (metric: TrendMetric) => void
 }) {
@@ -614,12 +638,12 @@ function Overview({ dashboard, cacheRate, toolSuccess, trendMetric, onTrendMetri
   return (
     <Stack gap="sm">
       <InstrumentStrip metrics={[
-        { label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns`, color: "sky" },
-        { label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime", color: "sage" },
-        { label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output`, color: "sky" },
-        { label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported", color: "honey" },
-        { label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "sky" },
-        { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100, color: "sage" }
+        { group: "Activity", label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns`, color: "sky" },
+        { group: "Activity", label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime", color: "sage" },
+        { group: "Activity", label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output`, color: "sky" },
+        { group: "Activity", label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported", color: "honey" },
+        { group: "Efficiency", label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "sky" },
+        { group: "Efficiency", label: "Tool success", value: toolSuccess.value, detail: toolSuccess.detail, progress: toolSuccess.progress, color: "sage" }
       ]} />
       <Suspense fallback={<ChartsFallback />}>
         <OverviewCharts dashboard={dashboard} metric={trendMetric} onMetricChange={onTrendMetricChange} />
@@ -630,17 +654,17 @@ function Overview({ dashboard, cacheRate, toolSuccess, trendMetric, onTrendMetri
 
 function Analytics({ dashboard, toolSuccess, section, onSectionChange }: {
   readonly dashboard: DashboardResponse | undefined
-  readonly toolSuccess: number
+  readonly toolSuccess: ReturnType<typeof toolSuccessPresentation>
   readonly section: AnalyticsSection
   readonly onSectionChange: (section: AnalyticsSection) => void
 }) {
   const summary = dashboard?.summary
   const summaryStrip = (
     <InstrumentStrip metrics={[
-      { label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: `${formatPercent(toolSuccess)} successful`, progress: toolSuccess * 100, color: "sage" },
-      { label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints", color: "sky" },
-      { label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "honey" },
-      { label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "sky" }
+      { group: "Event activity", label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: summary?.toolCalls ? `${toolSuccess.value} successful` : "No calls", progress: toolSuccess.progress, color: "sage" },
+      { group: "Event activity", label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints", color: "sky" },
+      { group: "Event activity", label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "honey" },
+      { group: "Event activity", label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "sky" }
     ]} />
   )
 
@@ -726,6 +750,33 @@ export default function App() {
     ...sessionQueryOptions(sessionId ?? ""),
     enabled: sessionId !== undefined
   })
+  const lastDashboardRef = useRef<DashboardResponse | undefined>(undefined)
+
+  useEffect(() => {
+    if (authQuery.data?.authenticated !== true) lastDashboardRef.current = undefined
+  }, [authQuery.data?.authenticated])
+
+  useEffect(() => {
+    if (dashboardQuery.data && !dashboardQuery.isPlaceholderData) lastDashboardRef.current = dashboardQuery.data
+  }, [dashboardQuery.data, dashboardQuery.isPlaceholderData])
+
+  useEffect(() => {
+    const keepFocusVisible = (event: FocusEvent) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement) || !target.closest("#dashboard-main") || !window.matchMedia("(max-width: 43.74em)").matches) return
+
+      requestAnimationFrame(() => {
+        const mobileNavigation = document.querySelector<HTMLElement>(".mobile-bottom-nav")
+        if (!mobileNavigation) return
+        const targetBounds = target.getBoundingClientRect()
+        const navigationBounds = mobileNavigation.getBoundingClientRect()
+        if (targetBounds.bottom > navigationBounds.top - 8) target.scrollIntoView({ block: "center" })
+      })
+    }
+
+    document.addEventListener("focusin", keepFocusVisible)
+    return () => document.removeEventListener("focusin", keepFocusVisible)
+  }, [])
 
   if (authQuery.isPending) {
     return <Center mih="100vh"><Stack align="center" gap="sm"><Loader type="dots" /><Text size="sm" c="dimmed">Loading Koliko</Text></Stack></Center>
@@ -752,13 +803,11 @@ export default function App() {
     )
   }
 
-  const dashboard = dashboardQuery.data
+  const dashboard = dashboardQuery.data ?? lastDashboardRef.current
   const summary = dashboard?.summary
   const cacheDenominator = (summary?.inputTokens ?? 0) + (summary?.cacheReadTokens ?? 0)
   const cacheRate = cacheDenominator === 0 ? 0 : (summary?.cacheReadTokens ?? 0) / cacheDenominator
-  const toolSuccess = (summary?.toolCalls ?? 0) === 0
-    ? 1
-    : 1 - (summary?.toolErrors ?? 0) / (summary?.toolCalls ?? 1)
+  const toolSuccess = toolSuccessPresentation(summary?.toolCalls ?? 0, summary?.toolErrors ?? 0)
   const page = pageTitles[tab]
 
   const navigate = (next: DashboardTab) => {
@@ -874,6 +923,26 @@ export default function App() {
         </AppShell.Section>
       </AppShell.Navbar>
 
+      <svg className="telemetry-motif" viewBox="0 0 720 144" aria-hidden="true" focusable="false" shapeRendering="crispEdges">
+        <g className="telemetry-session-trace">
+          <path d="M0 116H176V84H272" />
+          <rect x="164" y="104" width="24" height="24" />
+        </g>
+        <g className="telemetry-tool-trace">
+          <path d="M272 84H344V108H448" />
+          <rect x="336" y="76" width="16" height="16" />
+          <rect x="440" y="100" width="16" height="16" />
+          <rect x="476" y="100" width="16" height="16" />
+          <rect x="512" y="100" width="16" height="16" />
+        </g>
+        <g className="telemetry-agent-trace">
+          <path d="M272 84V36H392M344 36V16H452M344 36V60H500" />
+          <rect x="264" y="76" width="16" height="16" />
+          <rect x="444" y="8" width="16" height="16" />
+          <rect x="492" y="52" width="16" height="16" />
+        </g>
+      </svg>
+
       <AppShell.Main id="dashboard-main" tabIndex={-1}>
         <Box className="content-shell">
           <Box className="content-intro">
@@ -900,10 +969,22 @@ export default function App() {
             </Group>
           )}
 
-          {dashboardQuery.error !== null && <Alert color="rust" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{errorMessage(dashboardQuery.error, "Dashboard could not be loaded")}</Alert>}
+          {dashboardQuery.error !== null && dashboard ? (
+            <Alert color="rust" icon={<WarningCircleIcon />} title="Showing stale data" mb="lg">
+              {retainedRangeMessage(range, dashboard)}
+            </Alert>
+          ) : dashboardQuery.error !== null ? (
+            <Alert color="rust" icon={<WarningCircleIcon />} title="Dashboard unavailable" mb="lg">{errorMessage(dashboardQuery.error, "Dashboard could not be loaded")}</Alert>
+          ) : dashboardQuery.isPlaceholderData && dashboard ? (
+            <Alert color="sky" icon={<ArrowClockwiseIcon />} title="Updating range" mb="lg">
+              {loadingRangeMessage(range, dashboard)}
+            </Alert>
+          ) : null}
           <Box key={tab} className="page-content">
             {dashboardQuery.isPending && tab !== "settings"
               ? <Center mih={320}><Loader type="dots" /></Center>
+              : dashboard === undefined && tab !== "settings"
+                ? null
               : (
                 <>
                   {tab === "overview" && (
