@@ -1,0 +1,60 @@
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background: var(--koliko-bg);
+}
+
+.auth-layout {
+  width: min(100%, 440px);
+}
+
+.auth-brand {
+  padding-left: 4px;
+  margin-bottom: 18px;
+}
+
+.auth-brand .brand-mark {
+  width: 36px;
+  height: 36px;
+}
+
+.auth-card {
+  padding: 32px;
+  border: 1px solid var(--ds-work-line);
+  background: var(--ds-surface-work);
+  box-shadow: var(--ds-shadow-work);
+}
+
+.auth-heading > .mantine-ThemeIcon-root {
+  flex: 0 0 auto;
+}
+
+.auth-heading h1 {
+  font-size: 25px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.auth-heading p {
+  color: var(--ds-muted);
+  line-height: 1.5;
+}
+
+.auth-submit[data-variant="filled"],
+.auth-submit[data-variant="filled"]:hover,
+.accent-action[data-variant="filled"],
+.accent-action[data-variant="filled"]:hover {
+  color: light-dark(var(--ds-paper), #21140f);
+}
+
+.range-control .mantine-SegmentedControl-label {
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  padding-inline: 9px;
+  font-family: var(--ds-font-sans);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}

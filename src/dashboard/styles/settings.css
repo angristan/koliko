@@ -1,0 +1,95 @@
+.settings-page {
+  width: min(100%, 840px);
+  gap: 16px !important;
+}
+
+.settings-section {
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--ds-work-line);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-work);
+  box-shadow: var(--ds-shadow-work);
+}
+
+.settings-section-heading {
+  margin: -16px -16px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ds-line);
+  background: var(--ds-surface-work-header);
+}
+
+.settings-section-title {
+  color: var(--ds-ink);
+  font-size: 16px;
+  letter-spacing: -0.015em;
+}
+
+.settings-create-row {
+  width: 100%;
+}
+
+.settings-list {
+  min-height: 64px;
+  margin-top: 16px;
+  border-block: 1px solid var(--koliko-border-subtle);
+}
+
+.settings-list-row {
+  min-height: 60px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--koliko-border-subtle);
+}
+
+.settings-list-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-list-row > :first-child {
+  flex: 1 1 auto;
+}
+
+.settings-list-row > :last-child {
+  flex: 0 0 auto;
+}
+
+.settings-resource-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.settings-resource-name,
+.settings-resource-meta {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.settings-resource-meta {
+  line-height: 1.45;
+}
+
+.settings-empty-row {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.settings-session-row {
+  min-height: 44px;
+}
+
+.created-key {
+  border-color: color-mix(in srgb, var(--ds-safe) 55%, var(--ds-line));
+  background: var(--ds-safe-surface);
+  box-shadow: none;
+}
+
+.created-key-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-ink);
+  background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,325 @@
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  padding: 10px 14px;
+  border: 2px solid var(--ds-focus);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-ink);
+  background: var(--ds-paper);
+  box-shadow: var(--ds-shadow-md);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 12px));
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+.app-shell {
+  --app-shell-border-color: var(--ds-line);
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background: var(--koliko-bg);
+}
+
+.app-shell .mantine-AppShell-main {
+  position: relative;
+  z-index: 1;
+}
+
+.app-header {
+  z-index: 100;
+  isolation: isolate;
+  border-bottom: 1px solid var(--ds-glass-line);
+  background: var(--ds-glass-sheen), var(--koliko-surface-nav);
+  box-shadow: var(--ds-shadow-float);
+  -webkit-backdrop-filter: blur(var(--ds-glass-blur)) saturate(var(--ds-glass-saturate)) brightness(var(--ds-glass-brightness)) contrast(var(--ds-glass-contrast));
+  backdrop-filter: blur(var(--ds-glass-blur)) saturate(var(--ds-glass-saturate)) brightness(var(--ds-glass-brightness)) contrast(var(--ds-glass-contrast));
+}
+
+.appearance-controls {
+  flex: 0 0 auto;
+}
+
+.app-navbar {
+  z-index: 100;
+  isolation: isolate;
+  border-right: 1px solid var(--ds-glass-line);
+  background: var(--ds-glass-sheen), var(--koliko-surface-nav);
+  box-shadow: var(--ds-shadow-float), inset -1px 0 0 var(--ds-glass-refraction);
+  -webkit-backdrop-filter: blur(var(--ds-glass-blur)) saturate(var(--ds-glass-saturate)) brightness(var(--ds-glass-brightness)) contrast(var(--ds-glass-contrast));
+  backdrop-filter: blur(var(--ds-glass-blur)) saturate(var(--ds-glass-saturate)) brightness(var(--ds-glass-brightness)) contrast(var(--ds-glass-contrast));
+}
+
+.app-header::before,
+.app-navbar::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 1px;
+  border-radius: calc(var(--ds-radius-xl) - 1px);
+  background:
+    radial-gradient(ellipse 40% 20% at 18% 0%, color-mix(in srgb, var(--ds-glass-highlight) 72%, transparent), transparent 100%),
+    radial-gradient(ellipse 24% 90% at 100% 56%, color-mix(in srgb, var(--ds-glass-refraction) 55%, transparent), transparent 100%),
+    linear-gradient(112deg, transparent 28%, color-mix(in srgb, var(--ds-glass-highlight) 16%, transparent) 46%, transparent 58%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--ds-glass-highlight) 72%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--ds-glass-refraction) 75%, transparent);
+  pointer-events: none;
+}
+
+.app-header > *,
+.app-navbar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Controls inside glass chrome reuse its sampled backdrop instead of nesting filters. */
+.app-header :is(.mantine-Button-root, .mantine-ActionIcon-root, .mantine-SegmentedControl-root),
+.app-navbar :is(.mantine-Button-root, .mantine-ActionIcon-root),
+.mobile-page-toolbar :is(.mantine-ActionIcon-root, .mantine-SegmentedControl-root) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.navbar-brand {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--app-shell-border-color);
+  transition: margin var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), padding var(--app-shell-transition-duration) var(--app-shell-transition-timing-function);
+}
+
+.navbar-brand .brand {
+  gap: 12px;
+  overflow: hidden;
+  transition: gap var(--app-shell-transition-duration) var(--app-shell-transition-timing-function);
+}
+
+.navbar-brand .brand > div {
+  max-width: 112px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  white-space: nowrap;
+  transition: max-width 220ms var(--app-shell-transition-timing-function), opacity 150ms ease 70ms, transform 220ms var(--app-shell-transition-timing-function), visibility 0s linear;
+}
+
+.navbar-brand .brand > div > p:last-child {
+  display: none;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-panel);
+  box-shadow: 2px 2px 0 var(--ds-shadow-color);
+}
+
+.brand-mark svg {
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brand-mark .logo-stem {
+  fill: none;
+  stroke: var(--ds-panel-text);
+  stroke-width: 2.6;
+}
+
+.brand-mark .logo-branch {
+  fill: none;
+  stroke: var(--ds-accent);
+  stroke-width: 2.6;
+}
+
+.brand-mark .logo-node-center {
+  fill: var(--ds-sky);
+}
+
+.brand-mark .logo-node-end {
+  fill: var(--ds-panel-text);
+}
+
+.brand-name {
+  font-size: 15px;
+  letter-spacing: -0.015em;
+}
+
+
+.nav-item {
+  min-height: 40px;
+  position: relative;
+  overflow: hidden;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: width var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), min-width var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), padding var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), transform var(--ds-motion-fast) var(--ds-motion-easing), color var(--ds-motion-fast) var(--ds-motion-easing), background-color var(--ds-motion-fast) var(--ds-motion-easing), border-color var(--ds-motion-fast) var(--ds-motion-easing);
+}
+
+.nav-item:hover {
+  border-color: var(--ds-glass-line);
+  color: var(--ds-ink);
+  background: var(--ds-glass-strong);
+}
+
+.nav-item[data-active] {
+  border-color: color-mix(in srgb, var(--ds-safe) 34%, var(--ds-line));
+  color: var(--ds-ink);
+  background: color-mix(in srgb, var(--ds-safe) 7%, var(--ds-glass-overlay));
+  box-shadow: 0 10px 22px -18px color-mix(in srgb, var(--ds-ink) 55%, transparent), inset 0 1px 0 var(--ds-glass-highlight);
+  font-weight: 700;
+}
+
+.nav-item[data-active]::after {
+  content: "";
+  width: 3px;
+  position: absolute;
+  inset-block: 9px;
+  inset-inline-start: 3px;
+  border-radius: var(--ds-radius-xs);
+  background: var(--ds-safe);
+}
+
+.nav-item .mantine-NavLink-body {
+  max-width: 132px;
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+  transition: max-width 220ms var(--app-shell-transition-timing-function), opacity 150ms ease 70ms, transform 220ms var(--app-shell-transition-timing-function), visibility 0s linear;
+}
+
+.nav-item .mantine-NavLink-label {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.nav-item .mantine-NavLink-section {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  margin-inline-end: 10px;
+  border-radius: var(--ds-radius-sm);
+  transition: margin var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), color var(--ds-motion-fast) var(--ds-motion-easing), background var(--ds-motion-fast) var(--ds-motion-easing);
+}
+
+.nav-item[data-active] .mantine-NavLink-section {
+  color: var(--ds-safe);
+  background: var(--ds-safe-surface);
+}
+
+.navbar-navigation {
+  padding: 10px 8px;
+  transition: padding var(--app-shell-transition-duration) var(--app-shell-transition-timing-function);
+}
+
+.navbar-navigation .mantine-ScrollArea-viewport {
+  padding-block: 2px;
+  overflow-x: hidden !important;
+}
+
+.navbar-footer {
+  padding: 8px;
+  border-top: 1px solid var(--app-shell-border-color);
+  transition: margin var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), padding var(--app-shell-transition-duration) var(--app-shell-transition-timing-function);
+}
+
+.navbar-footer-actions {
+  width: 100%;
+}
+
+.sidebar-footer-action {
+  width: 100%;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  transition: width var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), padding var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), gap var(--app-shell-transition-duration) var(--app-shell-transition-timing-function), transform var(--ds-motion-fast) var(--ds-motion-easing), color var(--ds-motion-fast) var(--ds-motion-easing), border-color var(--ds-motion-fast) var(--ds-motion-easing), background var(--ds-motion-fast) var(--ds-motion-easing);
+}
+
+.sidebar-footer-action span {
+  max-width: 132px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  white-space: nowrap;
+  visibility: visible;
+  transition: max-width 220ms var(--app-shell-transition-timing-function), opacity 150ms ease 70ms, transform 220ms var(--app-shell-transition-timing-function), visibility 0s linear;
+}
+
+.sidebar-footer-action:hover {
+  border-color: var(--ds-glass-line);
+  color: var(--ds-ink);
+  background: var(--ds-glass-strong);
+}
+
+.sidebar-footer-action:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.sidebar-footer-action svg {
+  flex: 0 0 auto;
+}
+
+.page-heading {
+  display: none;
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.content-shell {
+  width: 100%;
+  max-width: var(--ds-shell-width);
+  padding: var(--ds-space-4) var(--ds-space-4) var(--ds-space-6);
+  margin: 0 auto;
+}
+
+.content-intro {
+  max-width: var(--ds-prose-width);
+  margin-bottom: var(--ds-space-4);
+}
+
+.content-intro h1 {
+  font-size: clamp(25px, 3vw, 31px);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.content-intro p {
+  font-size: var(--mantine-font-size-sm);
+}

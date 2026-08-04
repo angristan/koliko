@@ -7,6 +7,13 @@ import "@mantine/core/styles.css"
 import "@mantine/charts/styles.css"
 import { cssVariablesResolver, theme } from "./theme"
 import "./styles.css"
+import "./styles/shell.css"
+import "./styles/components.css"
+import "./styles/analytics.css"
+import "./styles/sessions.css"
+import "./styles/settings.css"
+import "./styles/auth.css"
+import "./styles/responsive.css"
 import App from "./App"
 
 const queryClient = new QueryClient({
