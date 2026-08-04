@@ -410,10 +410,10 @@ a {
 .instrument-strip {
   min-width: 0;
   overflow: hidden;
-  border-color: var(--ds-line-strong);
+  border-color: var(--ds-work-line);
   border-radius: var(--ds-radius-lg);
-  background: var(--ds-paper-muted);
-  box-shadow: inset 0 1px 0 var(--ds-glass-highlight);
+  background: var(--ds-surface-inset);
+  box-shadow: var(--ds-shadow-work);
 }
 
 .instrument-grid {
@@ -470,15 +470,16 @@ a {
 .panel {
   min-width: 0;
   overflow: hidden;
-  border-color: var(--koliko-border);
+  border-color: var(--ds-work-line);
   border-radius: var(--ds-radius-lg);
-  background: var(--koliko-surface);
-  box-shadow: inset 0 1px 0 var(--ds-glass-highlight);
+  background: var(--ds-surface-work);
+  box-shadow: var(--ds-shadow-work);
 }
 
 .panel-header {
   min-height: 46px;
   padding: 0 var(--ds-space-4);
+  background: var(--ds-surface-work-header);
 }
 
 .panel-header > .mantine-Text-root:last-child:not(:first-child) {
@@ -822,17 +823,17 @@ a {
 .settings-section {
   padding: 16px;
   overflow: hidden;
-  border: 1px solid var(--ds-line-strong);
+  border: 1px solid var(--ds-work-line);
   border-radius: var(--ds-radius-lg);
-  background: var(--ds-paper);
-  box-shadow: var(--ds-shadow-xs);
+  background: var(--ds-surface-work);
+  box-shadow: var(--ds-shadow-work);
 }
 
 .settings-section-heading {
   margin: -16px -16px 16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--ds-line);
-  background: var(--ds-paper-muted);
+  background: var(--ds-surface-work-header);
 }
 
 .settings-section-title {
@@ -914,9 +915,9 @@ a {
 
 .auth-card {
   padding: 32px;
-  border: 1px solid var(--ds-line-strong);
-  background: var(--koliko-surface);
-  box-shadow: var(--ds-shadow-md);
+  border: 1px solid var(--ds-work-line);
+  background: var(--ds-surface-work);
+  box-shadow: var(--ds-shadow-work);
 }
 
 .auth-heading > .mantine-ThemeIcon-root {
@@ -1107,7 +1108,7 @@ a {
     border: 1px solid var(--ds-glass-line);
     border-radius: var(--ds-radius-md);
     background: var(--ds-glass-sheen), var(--ds-glass-strong);
-    box-shadow: var(--ds-shadow-xs), inset 0 1px 0 var(--ds-glass-highlight);
+    box-shadow: var(--ds-shadow-control), inset 0 1px 0 var(--ds-glass-highlight);
     -webkit-backdrop-filter: blur(var(--ds-glass-blur)) saturate(var(--ds-glass-saturate)) brightness(var(--ds-glass-brightness)) contrast(var(--ds-glass-contrast));
     backdrop-filter: blur(var(--ds-glass-blur)) saturate(var(--ds-glass-saturate)) brightness(var(--ds-glass-brightness)) contrast(var(--ds-glass-contrast));
   }
