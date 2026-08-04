@@ -55,6 +55,7 @@ import {
   WarningCircleIcon
 } from "@phosphor-icons/react"
 import type { ApiKeySummary, DashboardResponse, PasskeySummary, SessionDetailResponse } from "../shared/api"
+import rooftopRefuge from "./assets/rooftop-refuge.png"
 import {
   apiKeysQueryOptions,
   authQueryOptions,
@@ -923,25 +924,7 @@ export default function App() {
         </AppShell.Section>
       </AppShell.Navbar>
 
-      <svg className="telemetry-motif" viewBox="0 0 720 144" aria-hidden="true" focusable="false" shapeRendering="crispEdges">
-        <g className="telemetry-session-trace">
-          <path d="M0 116H176V84H272" />
-          <rect x="164" y="104" width="24" height="24" />
-        </g>
-        <g className="telemetry-tool-trace">
-          <path d="M272 84H344V108H448" />
-          <rect x="336" y="76" width="16" height="16" />
-          <rect x="440" y="100" width="16" height="16" />
-          <rect x="476" y="100" width="16" height="16" />
-          <rect x="512" y="100" width="16" height="16" />
-        </g>
-        <g className="telemetry-agent-trace">
-          <path d="M272 84V36H392M344 36V16H452M344 36V60H500" />
-          <rect x="264" y="76" width="16" height="16" />
-          <rect x="444" y="8" width="16" height="16" />
-          <rect x="492" y="52" width="16" height="16" />
-        </g>
-      </svg>
+      <img className="rooftop-refuge" src={rooftopRefuge} alt="" aria-hidden="true" />
 
       <AppShell.Main id="dashboard-main" tabIndex={-1}>
         <Box className="content-shell">

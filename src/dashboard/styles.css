@@ -89,40 +89,19 @@ a {
   z-index: 1;
 }
 
-.telemetry-motif {
-  width: 190px;
-  height: auto;
+.rooftop-refuge {
+  width: 160px;
+  height: 64px;
   position: fixed;
   z-index: 101;
-  right: auto;
-  bottom: 125px;
-  left: 20px;
-  overflow: visible;
-  opacity: 0.24;
+  bottom: 124px;
+  left: 28px;
+  opacity: .68;
+  image-rendering: pixelated;
   pointer-events: none;
 }
 
-.app-navbar[data-desktop-collapsed="true"] + .telemetry-motif { display: none; }
-
-.telemetry-motif path {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  vector-effect: non-scaling-stroke;
-}
-
-.telemetry-session-trace path,
-.telemetry-session-trace rect { stroke: var(--ds-info); }
-.telemetry-session-trace rect { fill: color-mix(in srgb, var(--ds-info) 20%, var(--ds-canvas)); }
-
-.telemetry-tool-trace path,
-.telemetry-tool-trace rect { stroke: var(--ds-safe); }
-.telemetry-tool-trace rect { fill: color-mix(in srgb, var(--ds-safe) 22%, var(--ds-canvas)); }
-
-.telemetry-agent-trace path,
-.telemetry-agent-trace rect { stroke: var(--ds-accent-border); }
-.telemetry-agent-trace rect { fill: color-mix(in srgb, var(--ds-accent) 18%, var(--ds-canvas)); }
+.app-navbar[data-desktop-collapsed="true"] + .rooftop-refuge { display: none; }
 
 .app-header {
   z-index: 100;
@@ -1168,7 +1147,7 @@ a {
 }
 
 @media (max-width: 43.74em) {
-  .telemetry-motif { display: none; }
+  .rooftop-refuge { display: none; }
 
   .app-header {
     top: 8px;
@@ -1504,10 +1483,12 @@ a {
   }
 }
 
+@media (max-height: 48em) {
+  .rooftop-refuge { display: none; }
+}
+
 @media (prefers-reduced-transparency: reduce) {
-  .telemetry-motif {
-    opacity: 0.38;
-  }
+  .rooftop-refuge { opacity: .82; }
 
   .app-header,
   .app-navbar,
