@@ -14,13 +14,13 @@ import {
   Drawer,
   Group,
   Loader,
+  Modal,
   NavLink,
   Paper,
   PasswordInput,
   Progress,
   ScrollArea,
   SegmentedControl,
-  SimpleGrid,
   Stack,
   Table,
   Text,
@@ -60,16 +60,18 @@ import {
   WarningCircleIcon,
   WrenchIcon
 } from "@phosphor-icons/react"
-import type { DashboardResponse, SessionDetailResponse } from "../shared/api"
+import type { DashboardResponse, PasskeySummary, SessionDetailResponse } from "../shared/api"
 import {
   apiKeysQueryOptions,
   authQueryOptions,
   dashboardQueryOptions,
+  passkeysQueryOptions,
   sessionQueryOptions,
   useCreateApiKeyMutation,
   useLoginMutation,
   useLogoutMutation,
   useRegisterPasskeyMutation,
+  useRemovePasskeyMutation,
   useRevokeApiKeyMutation
 } from "./queries"
 
@@ -104,11 +106,11 @@ const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback
 
-const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly description: string }>> = {
+const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly description?: string }>> = {
   overview: { title: "Overview", description: "See where your agent time, tokens, and spend are going." },
   analytics: { title: "Analytics", description: "Explore usage, cost, tools, sessions, and agent feature trends." },
   sessions: { title: "Sessions", description: "Inspect recent runs and their privacy-safe event metadata." },
-  settings: { title: "Settings", description: "Manage collector access, passkeys, and your data boundary." }
+  settings: { title: "Settings" }
 }
 
 function LogoMark() {
@@ -229,6 +231,7 @@ function Login({
   readonly onToggleColorScheme: () => void
 }) {
   const [token, setToken] = useState("")
+  const [passkeyName, setPasskeyName] = useState("Primary passkey")
   const loginMutation = useLoginMutation()
   const registerMutation = useRegisterPasskeyMutation()
   const error = loginMutation.error ?? registerMutation.error
@@ -237,7 +240,7 @@ function Login({
   const act = async () => {
     try {
       if (hasPasskey) await loginMutation.mutateAsync()
-      else await registerMutation.mutateAsync(token)
+      else await registerMutation.mutateAsync({ name: passkeyName.trim(), bootstrapToken: token })
     } catch {
       // The mutation keeps the typed error for the alert below.
     }
@@ -287,15 +290,25 @@ function Login({
               {error && <Alert color="rust" icon={<WarningCircleIcon />} title="Authentication failed">{errorMessage(error, "Authentication failed")}</Alert>}
 
               {!hasPasskey && (
-                <PasswordInput
-                  label="Bootstrap token"
-                  description="Configured in your Worker environment"
-                  autoComplete="off"
-                  value={token}
-                  onChange={(event) => setToken(event.currentTarget.value)}
-                  placeholder="BOOTSTRAP_TOKEN"
-                  size="md"
-                />
+                <Stack gap="sm">
+                  <TextInput
+                    label="Passkey name"
+                    value={passkeyName}
+                    onChange={(event) => setPasskeyName(event.currentTarget.value)}
+                    placeholder="Primary passkey"
+                    size="md"
+                    maxLength={80}
+                  />
+                  <PasswordInput
+                    label="Bootstrap token"
+                    description="Configured in your Worker environment"
+                    autoComplete="off"
+                    value={token}
+                    onChange={(event) => setToken(event.currentTarget.value)}
+                    placeholder="BOOTSTRAP_TOKEN"
+                    size="md"
+                  />
+                </Stack>
               )}
 
               <Button
@@ -305,7 +318,7 @@ function Login({
                 color="sage"
                 size="md"
                 loading={busy}
-                disabled={!hasPasskey && token.length === 0}
+                disabled={!hasPasskey && (token.length === 0 || passkeyName.trim().length === 0)}
                 leftSection={hasPasskey ? <LockKeyIcon size={18} /> : <ShieldCheckIcon size={18} />}
                 fullWidth
               >
@@ -387,74 +400,94 @@ function SessionDrawer({
 
 function Settings() {
   const apiKeysQuery = useQuery(apiKeysQueryOptions())
+  const passkeysQuery = useQuery(passkeysQueryOptions())
   const createMutation = useCreateApiKeyMutation()
   const revokeMutation = useRevokeApiKeyMutation()
   const registerMutation = useRegisterPasskeyMutation()
+  const removePasskeyMutation = useRemovePasskeyMutation()
   const logoutMutation = useLogoutMutation()
-  const [name, setName] = useState("Local Pi collector")
+  const [keyName, setKeyName] = useState("Local Pi collector")
+  const [passkeyName, setPasskeyName] = useState("")
   const [createdKey, setCreatedKey] = useState<string>()
-  const [message, setMessage] = useState<string>()
+  const [keyMessage, setKeyMessage] = useState<string>()
+  const [passkeyToRemove, setPasskeyToRemove] = useState<PasskeySummary>()
   const keys = apiKeysQuery.data?.keys ?? []
+  const passkeys = passkeysQuery.data?.passkeys ?? []
 
-  const create = () => {
-    createMutation.mutate(name, {
+  const createKey = () => {
+    createMutation.mutate(keyName, {
       onSuccess: (result) => {
         setCreatedKey(result.key)
-        setMessage("Copy this key now. It will not be shown again.")
+        setKeyMessage("Copy this key now. It will not be shown again.")
       },
-      onError: (cause) => setMessage(errorMessage(cause, "API key could not be created"))
+      onError: (cause) => setKeyMessage(errorMessage(cause, "API key could not be created"))
+    })
+  }
+
+  const addPasskey = () => {
+    registerMutation.mutate({ name: passkeyName.trim() }, {
+      onSuccess: () => setPasskeyName("")
+    })
+  }
+
+  const confirmPasskeyRemoval = () => {
+    if (!passkeyToRemove) return
+    removePasskeyMutation.mutate(passkeyToRemove.id, {
+      onSuccess: () => setPasskeyToRemove(undefined)
     })
   }
 
   return (
-    <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md" className="settings-grid">
-      <Box className="settings-main">
-        <Panel title="Collector API keys" detail="Ingestion access">
-          <Stack p="md" gap="md">
-            <Box>
-              <Text size="sm" fw={600}>Connect a collector</Text>
-              <Text size="xs" c="dimmed" mt={4}>Create one independently revocable key for each coding-agent collector. Only hashes are stored.</Text>
-            </Box>
+    <>
+      <Stack gap={0} className="settings-page">
+        <Box component="section" className="settings-section">
+          <Box className="settings-section-heading">
+            <Text fw={700} className="settings-section-title">Collector keys</Text>
+            <Text size="xs" c="dimmed" mt={3}>Create one independently revocable key for each collector. Only hashes are stored.</Text>
+          </Box>
 
-            {apiKeysQuery.error !== null && <Alert color="rust" icon={<WarningCircleIcon />}>{errorMessage(apiKeysQuery.error, "API keys could not be loaded")}</Alert>}
-            {message && <Alert color={createdKey ? "sage" : "rust"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{message}</Alert>}
+          {apiKeysQuery.error !== null && <Alert mb="md" color="rust" icon={<WarningCircleIcon />}>{errorMessage(apiKeysQuery.error, "API keys could not be loaded")}</Alert>}
+          {keyMessage && <Alert mb="md" color={createdKey ? "sage" : "rust"} icon={createdKey ? <KeyIcon /> : <WarningCircleIcon />}>{keyMessage}</Alert>}
 
-            {createdKey && (
-              <Paper withBorder radius="md" p="md" className="created-key">
-                <Group justify="space-between" wrap="nowrap">
-                  <Code className="created-key-value">{createdKey}</Code>
-                  <CopyButton value={createdKey} timeout={1600}>
-                    {({ copied, copy }) => (
-                      <Button variant="light" color={copied ? "sage" : "sky"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
-                        {copied ? "Copied" : "Copy"}
-                      </Button>
-                    )}
-                  </CopyButton>
-                </Group>
-              </Paper>
-            )}
+          {createdKey && (
+            <Paper withBorder radius="md" p="md" mb="md" className="created-key">
+              <Group justify="space-between" wrap="nowrap">
+                <Code className="created-key-value">{createdKey}</Code>
+                <CopyButton value={createdKey} timeout={1600}>
+                  {({ copied, copy }) => (
+                    <Button variant="light" color={copied ? "sage" : "sky"} onClick={copy} leftSection={copied ? <CheckCircleIcon /> : <CopyIcon />}>
+                      {copied ? "Copied" : "Copy"}
+                    </Button>
+                  )}
+                </CopyButton>
+              </Group>
+            </Paper>
+          )}
 
-            <Group align="flex-end" wrap="nowrap" className="key-create">
-              <TextInput label="Key name" value={name} onChange={(event) => setName(event.currentTarget.value)} flex={1} />
-              <Button className="accent-action" variant="filled" color="sage" loading={createMutation.isPending} onClick={create} leftSection={<KeyIcon />}>Create key</Button>
-            </Group>
-          </Stack>
+          <Group align="flex-end" wrap="nowrap" className="settings-create-row">
+            <TextInput label="Key name" value={keyName} onChange={(event) => setKeyName(event.currentTarget.value)} flex={1} maxLength={80} />
+            <Button
+              className="accent-action"
+              variant="filled"
+              color="sage"
+              loading={createMutation.isPending}
+              disabled={keyName.trim().length === 0}
+              onClick={createKey}
+              leftSection={<KeyIcon />}
+            >Create key</Button>
+          </Group>
 
-          <Divider />
-          <Stack gap={0} className="key-list">
-            {apiKeysQuery.isPending && <Center mih={120}><Loader type="dots" /></Center>}
+          <Stack gap={0} className="settings-list">
+            {apiKeysQuery.isPending && <Center mih={72}><Loader type="dots" /></Center>}
             {keys.map((key) => (
-              <Group key={key.id} justify="space-between" wrap="nowrap" className="key-row">
-                <Group wrap="nowrap" miw={0}>
-                  <ThemeIcon variant="light" color={key.revokedAt ? "gray" : "sky"} radius="md"><KeyIcon /></ThemeIcon>
-                  <Box miw={0}>
-                    <Group gap="xs">
-                      <Text size="sm" fw={600} truncate>{key.name}</Text>
-                      {key.revokedAt && <Badge size="xs" variant="light" color="gray">Revoked</Badge>}
-                    </Group>
-                    <Text size="xs" c="dimmed" truncate>{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</Text>
-                  </Box>
-                </Group>
+              <Group key={key.id} justify="space-between" wrap="nowrap" className="settings-list-row">
+                <Box miw={0}>
+                  <Group gap="xs">
+                    <Text size="sm" fw={600} truncate>{key.name}</Text>
+                    {key.revokedAt && <Badge size="xs" variant="light" color="gray">Revoked</Badge>}
+                  </Group>
+                  <Text size="xs" c="dimmed" truncate>{key.prefix}… · {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "never used"}</Text>
+                </Box>
                 {!key.revokedAt && (
                   <Button
                     variant="subtle"
@@ -462,65 +495,100 @@ function Settings() {
                     size="compact-sm"
                     loading={revokeMutation.isPending && revokeMutation.variables === key.id}
                     onClick={() => revokeMutation.mutate(key.id, {
-                      onError: (cause) => setMessage(errorMessage(cause, "API key could not be revoked"))
+                      onError: (cause) => setKeyMessage(errorMessage(cause, "API key could not be revoked"))
                     })}
                   >Revoke</Button>
                 )}
               </Group>
             ))}
-            {!apiKeysQuery.isPending && keys.length === 0 && <EmptyState icon={<KeyIcon />} title="No collector keys" detail="Create your first key to connect a coding agent." />}
+            {!apiKeysQuery.isPending && keys.length === 0 && <Text size="sm" c="dimmed" className="settings-empty-row">No collector keys yet.</Text>}
           </Stack>
-        </Panel>
-      </Box>
+        </Box>
 
-      <Stack gap="md" className="settings-side">
-        <Panel title="Passkeys">
-          <Stack p="md" gap="sm">
-            <ThemeIcon size={40} radius="md" variant="light" color="sage"><ShieldCheckIcon /></ThemeIcon>
-            <Box>
-              <Text size="sm" fw={600}>Passwordless security</Text>
-              <Text size="xs" c="dimmed" mt={4}>User verification is required for every dashboard sign-in.</Text>
-            </Box>
+        <Box component="section" className="settings-section">
+          <Box className="settings-section-heading">
+            <Text fw={700} className="settings-section-title">Passkeys</Text>
+            <Text size="xs" c="dimmed" mt={3}>Name passkeys so you can recognize and remove old devices.</Text>
+          </Box>
+
+          {(passkeysQuery.error !== null || registerMutation.error !== null || removePasskeyMutation.error !== null) && (
+            <Alert mb="md" color="rust" icon={<WarningCircleIcon />}>
+              {errorMessage(passkeysQuery.error ?? registerMutation.error ?? removePasskeyMutation.error, "Passkeys could not be updated")}
+            </Alert>
+          )}
+
+          <Group align="flex-end" wrap="nowrap" className="settings-create-row">
+            <TextInput
+              label="Passkey name"
+              value={passkeyName}
+              onChange={(event) => setPasskeyName(event.currentTarget.value)}
+              placeholder="MacBook Touch ID"
+              flex={1}
+              maxLength={80}
+            />
             <Button
               variant="light"
               loading={registerMutation.isPending}
-              onClick={() => registerMutation.mutate(undefined, {
-                onSuccess: () => setMessage("Passkey added."),
-                onError: (cause) => setMessage(errorMessage(cause, "Passkey could not be added"))
-              })}
+              disabled={passkeyName.trim().length === 0}
+              onClick={addPasskey}
               leftSection={<ShieldCheckIcon />}
             >Add passkey</Button>
-            <Button
-              variant="subtle"
-              color="gray"
-              loading={logoutMutation.isPending}
-              onClick={() => logoutMutation.mutate(undefined, {
-                onError: (cause) => setMessage(errorMessage(cause, "Could not sign out"))
-              })}
-              leftSection={<SignOutIcon />}
-            >Sign out</Button>
-          </Stack>
-        </Panel>
+          </Group>
 
-        <Panel title="Privacy boundary">
-          <Stack p="md" gap="sm">
-            {[
-              ["Collected", "Usage counts, models, timing, cost, and lifecycle metadata."],
-              ["Excluded", "Prompts, responses, code, arguments, output, and paths."],
-              ["Repository", "Folder name only — never a remote or absolute path."]
-            ].map(([label, detail]) => (
-              <Group key={label} align="flex-start" wrap="nowrap">
-                <CheckCircleIcon size={18} className="privacy-check" />
-                <Box>
-                  <Text size="xs" fw={600}>{label}</Text>
-                  <Text size="xs" c="dimmed" mt={2}>{detail}</Text>
+          <Stack gap={0} className="settings-list">
+            {passkeysQuery.isPending && <Center mih={72}><Loader type="dots" /></Center>}
+            {passkeys.map((passkey) => (
+              <Group key={passkey.id} justify="space-between" wrap="nowrap" className="settings-list-row">
+                <Box miw={0}>
+                  <Text size="sm" fw={600} truncate>{passkey.name}</Text>
+                  <Text size="xs" c="dimmed" truncate>
+                    {passkey.backedUp ? "Synced" : passkey.deviceType === "multiDevice" ? "Multi-device" : "Device-bound"}
+                    {` · added ${new Date(passkey.createdAt).toLocaleDateString()}`}
+                    {passkey.lastUsedAt ? ` · last used ${new Date(passkey.lastUsedAt).toLocaleDateString()}` : " · never used"}
+                  </Text>
                 </Box>
+                {passkeys.length > 1 ? (
+                  <Button
+                    variant="subtle"
+                    color="rust"
+                    size="compact-sm"
+                    onClick={() => setPasskeyToRemove(passkey)}
+                  >Remove</Button>
+                ) : (
+                  <Badge size="sm" variant="light" color="gray">Required</Badge>
+                )}
               </Group>
             ))}
           </Stack>
-        </Panel>
+        </Box>
+
+        <Box component="section" className="settings-section">
+          <Box className="settings-section-heading">
+            <Text fw={700} className="settings-section-title">Session</Text>
+          </Box>
+          {logoutMutation.error && <Alert mb="md" color="rust" icon={<WarningCircleIcon />}>{errorMessage(logoutMutation.error, "Could not sign out")}</Alert>}
+          <Group justify="space-between" wrap="nowrap" className="settings-session-row">
+            <Text size="sm">This browser</Text>
+            <Button variant="default" loading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()} leftSection={<SignOutIcon />}>Sign out</Button>
+          </Group>
+        </Box>
       </Stack>
-    </SimpleGrid>
+
+      <Modal
+        opened={passkeyToRemove !== undefined}
+        onClose={() => setPasskeyToRemove(undefined)}
+        title="Remove passkey?"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">{passkeyToRemove ? `“${passkeyToRemove.name}” will no longer be able to sign in to Koliko.` : "This passkey will no longer be able to sign in to Koliko."}</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setPasskeyToRemove(undefined)}>Cancel</Button>
+            <Button color="rust" loading={removePasskeyMutation.isPending} onClick={confirmPasskeyRemoval}>Remove passkey</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
   )
 }
 
@@ -791,7 +859,7 @@ export default function App() {
         <Box className="content-shell">
           <Box className="content-intro">
             <Title order={1} className="content-title">{page.title}</Title>
-            <Text c="dimmed" mt={6}>{page.description}</Text>
+            {page.description && <Text c="dimmed" mt={6}>{page.description}</Text>}
           </Box>
 
           {tab !== "settings" && (

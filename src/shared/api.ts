@@ -1,4 +1,17 @@
 import { Schema } from "effect"
+import { RegistrationCredentialPayload } from "./protocol"
+
+export const PasskeyName = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isLengthBetween(1, 80)
+)
+
+export class RegistrationVerifyPayload extends Schema.Class<RegistrationVerifyPayload>(
+  "RegistrationVerifyPayload"
+)({
+  name: PasskeyName,
+  credential: RegistrationCredentialPayload
+}) {}
 
 export class SummaryMetrics extends Schema.Class<SummaryMetrics>("SummaryMetrics")({
   sessions: Schema.Number,
@@ -103,6 +116,19 @@ export class SessionDetailResponse extends Schema.Class<SessionDetailResponse>("
   repository: Schema.String,
   events: Schema.Array(SessionEvent),
   truncated: Schema.Boolean
+}) {}
+
+export class PasskeySummary extends Schema.Class<PasskeySummary>("PasskeySummary")({
+  id: Schema.String,
+  name: PasskeyName,
+  deviceType: Schema.String,
+  backedUp: Schema.Boolean,
+  createdAt: Schema.String,
+  lastUsedAt: Schema.NullOr(Schema.String)
+}) {}
+
+export class PasskeysResponse extends Schema.Class<PasskeysResponse>("PasskeysResponse")({
+  passkeys: Schema.Array(PasskeySummary)
 }) {}
 
 export class ApiKeySummary extends Schema.Class<ApiKeySummary>("ApiKeySummary")({

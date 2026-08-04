@@ -814,9 +814,65 @@ a {
   background: var(--ds-paper);
 }
 
-.settings-main {
-  grid-column: span 2;
-  min-width: 0;
+.settings-page {
+  width: min(100%, 840px);
+  gap: 16px !important;
+}
+
+.settings-section {
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-paper);
+  box-shadow: var(--ds-shadow-xs);
+}
+
+.settings-section-heading {
+  margin: -16px -16px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ds-line);
+  background: var(--ds-paper-muted);
+}
+
+.settings-section-title {
+  color: var(--ds-ink);
+  font-size: 16px;
+  letter-spacing: -0.015em;
+}
+
+.settings-create-row {
+  width: 100%;
+}
+
+.settings-list {
+  min-height: 64px;
+  margin-top: 16px;
+  border-block: 1px solid var(--koliko-border-subtle);
+}
+
+.settings-list-row {
+  min-height: 60px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--koliko-border-subtle);
+}
+
+.settings-list-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-list-row > :last-child {
+  flex: 0 0 auto;
+}
+
+.settings-empty-row {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.settings-session-row {
+  min-height: 44px;
 }
 
 .created-key {
@@ -832,25 +888,6 @@ a {
   background: transparent;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.key-list {
-  min-height: 100px;
-}
-
-.key-row {
-  min-height: 56px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--koliko-border-subtle);
-}
-
-.key-row:last-child {
-  border-bottom: 0;
-}
-
-.privacy-check {
-  flex: 0 0 auto;
-  color: var(--ds-sage);
 }
 
 .auth-shell {
@@ -1022,12 +1059,6 @@ a {
     transform: translateX(-6px);
     visibility: hidden;
     transition: max-width 180ms var(--app-shell-transition-timing-function), opacity 100ms ease, transform 180ms var(--app-shell-transition-timing-function), visibility 0s linear 180ms;
-  }
-}
-
-@media (max-width: 75em) {
-  .settings-main {
-    grid-column: auto;
   }
 }
 
@@ -1303,7 +1334,7 @@ a {
     font-size: 12px;
   }
 
-  .key-create {
+  .settings-create-row {
     align-items: stretch;
     flex-direction: column;
   }

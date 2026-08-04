@@ -5,12 +5,12 @@ import {
   verifyRegistrationResponse
 } from "@simplewebauthn/server"
 import { Effect, Schema } from "effect"
+import { PasskeyName, RegistrationVerifyPayload } from "../shared/api"
 import {
   ApiKeyCreatePayload,
-  AuthenticationCredentialPayload,
-  RegistrationCredentialPayload
+  AuthenticationCredentialPayload
 } from "../shared/protocol"
-import { completeAuthentication, registerPasskey } from "./auth-storage"
+import { completeAuthentication, registerPasskey, removePasskey } from "./auth-storage"
 import { fromBase64Url, randomToken, safeSecretEqual, sha256, signValue, toBase64Url, verifySignedValue } from "./crypto"
 import {
   clearCookie,
@@ -44,13 +44,25 @@ const SessionClaims = Schema.Struct({
   expiresAt: Schema.Number
 })
 
+const BackedUpBit = Schema.Literals([0, 1])
+
 const PasskeyRow = Schema.Struct({
   credential_id: Schema.String,
+  name: PasskeyName,
   public_key: Schema.String,
   counter: Schema.Number,
   transports: Schema.String,
   device_type: Schema.String,
-  backed_up: Schema.Number,
+  backed_up: BackedUpBit,
+  created_at: Schema.String,
+  last_used_at: Schema.NullOr(Schema.String)
+})
+
+const PasskeySummaryRow = Schema.Struct({
+  credential_id: Schema.String,
+  name: PasskeyName,
+  device_type: Schema.String,
+  backed_up: BackedUpBit,
   created_at: Schema.String,
   last_used_at: Schema.NullOr(Schema.String)
 })
@@ -287,7 +299,7 @@ const verifiedResponse = (env: WorkerEnv, session: string): Response => {
   return json({ verified: true }, { headers })
 }
 
-const listPasskeyRows = Effect.fn("Auth.listPasskeys")(function*(env: WorkerEnv) {
+const listPasskeyRows = Effect.fn("Auth.listPasskeyRows")(function*(env: WorkerEnv) {
   const result = yield* tryStorage(
     "list passkeys",
     () => env.DB.prepare("SELECT * FROM passkeys ORDER BY created_at").all()
@@ -348,24 +360,25 @@ export const verifyRegistration = Effect.fn("Auth.verifyRegistration")(function*
   const registrationMode = yield* requireBootstrapOrSession(request, env)
   const challenge = yield* readChallenge(request, env, "registration")
   const input = yield* readRequestJson(request)
-  const payload = yield* decodeRequest(RegistrationCredentialPayload, input)
+  const payload = yield* decodeRequest(RegistrationVerifyPayload, input)
+  const credentialPayload = payload.credential
 
   const response = {
-    id: payload.id,
-    rawId: payload.rawId,
+    id: credentialPayload.id,
+    rawId: credentialPayload.rawId,
     response: {
-      clientDataJSON: payload.response.clientDataJSON,
-      attestationObject: payload.response.attestationObject,
-      ...(payload.response.authenticatorData !== undefined
-        ? { authenticatorData: payload.response.authenticatorData }
+      clientDataJSON: credentialPayload.response.clientDataJSON,
+      attestationObject: credentialPayload.response.attestationObject,
+      ...(credentialPayload.response.authenticatorData !== undefined
+        ? { authenticatorData: credentialPayload.response.authenticatorData }
         : {}),
-      ...(payload.response.transports !== undefined
-        ? { transports: [...payload.response.transports] }
+      ...(credentialPayload.response.transports !== undefined
+        ? { transports: [...credentialPayload.response.transports] }
         : {}),
-      ...(payload.response.publicKeyAlgorithm !== undefined
-        ? { publicKeyAlgorithm: payload.response.publicKeyAlgorithm }
+      ...(credentialPayload.response.publicKeyAlgorithm !== undefined
+        ? { publicKeyAlgorithm: credentialPayload.response.publicKeyAlgorithm }
         : {}),
-      ...(payload.response.publicKey !== undefined ? { publicKey: payload.response.publicKey } : {})
+      ...(credentialPayload.response.publicKey !== undefined ? { publicKey: credentialPayload.response.publicKey } : {})
     },
     clientExtensionResults: {},
     type: publicKeyCredentialType
@@ -400,6 +413,7 @@ export const verifyRegistration = Effect.fn("Auth.verifyRegistration")(function*
     challengeExpiresAt: challenge.expiresAt,
     verifiedAt,
     credentialId: credential.id,
+    name: payload.name,
     publicKey,
     counter: credential.counter,
     transports: JSON.stringify(credential.transports ?? []),
@@ -552,6 +566,58 @@ const noContentWithCookie = (cookie: string): Response =>
 export const logout = Effect.fn("Auth.logout")(function*(request: Request, env: WorkerEnv) {
   yield* requireSameOrigin(request, env)
   return noContentWithCookie(clearCookie(SESSION_COOKIE, env.EXPECTED_ORIGIN))
+})
+
+export const listPasskeys = Effect.fn("Auth.listPasskeys")(function*(request: Request, env: WorkerEnv) {
+  yield* requireSession(request, env)
+  const result = yield* tryStorage(
+    "list passkey summaries",
+    () => env.DB.prepare(
+      `SELECT credential_id, name, device_type, backed_up, created_at, last_used_at
+       FROM passkeys ORDER BY created_at`
+    ).all()
+  )
+  const rows = yield* decodeStored(Schema.Array(PasskeySummaryRow), result.results)
+  return json({
+    passkeys: rows.map((row) => ({
+      id: row.credential_id,
+      name: row.name,
+      deviceType: row.device_type,
+      backedUp: row.backed_up === 1,
+      createdAt: row.created_at,
+      lastUsedAt: row.last_used_at
+    }))
+  })
+})
+
+export const deletePasskey = Effect.fn("Auth.deletePasskey")(function*(
+  request: Request,
+  env: WorkerEnv,
+  credentialId: string
+) {
+  yield* requireSameOrigin(request, env)
+  yield* requireSession(request, env)
+
+  const result = yield* tryStorage(
+    "remove passkey",
+    () => removePasskey(env, credentialId)
+  )
+  if (result === "unknown") {
+    return yield* Effect.fail(HttpFailure.make({
+      status: 404,
+      code: "passkey_not_found",
+      message: "Passkey was not found"
+    }))
+  }
+  if (result === "final") {
+    return yield* Effect.fail(HttpFailure.make({
+      status: 409,
+      code: "last_passkey",
+      message: "The final passkey cannot be removed"
+    }))
+  }
+
+  return noContent()
 })
 
 export const listApiKeys = Effect.fn("Auth.listApiKeys")(function*(request: Request, env: WorkerEnv) {

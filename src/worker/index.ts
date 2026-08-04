@@ -3,7 +3,9 @@ import {
   authenticationOptions,
   authStatus,
   createApiKey,
+  deletePasskey,
   listApiKeys,
+  listPasskeys,
   logout,
   registrationOptions,
   revokeApiKey,
@@ -45,6 +47,14 @@ const routeApi = (
     return runTracedRequest(request, context, operationNames.authenticatePasskey, verifyAuthentication(request, env))
   }
   if (request.method === "POST" && pathname === "/api/auth/logout") return runRequest(request, logout(request, env))
+  if (request.method === "GET" && pathname === "/api/auth/passkeys") {
+    return runRequest(request, listPasskeys(request, env))
+  }
+
+  const passkeyMatch = pathname.match(/^\/api\/auth\/passkeys\/([^/]+)$/u)
+  if (request.method === "DELETE" && passkeyMatch) {
+    return runRequest(request, deletePasskey(request, env, decodeURIComponent(passkeyMatch[1])))
+  }
 
   if (request.method === "POST" && pathname === "/api/v1/events") {
     return runTracedRequest(request, context, operationNames.ingestTelemetry, ingestTelemetry(request, env))

@@ -10,11 +10,14 @@ import {
   getApiKeys,
   getAuthStatus,
   getDashboard,
+  getPasskeys,
   getSession,
   loginWithPasskey,
   logout,
   registerPasskey,
-  revokeApiKey
+  removePasskey,
+  revokeApiKey,
+  type RegisterPasskeyInput
 } from "./api"
 
 export const dashboardQueryKeys = {
@@ -23,7 +26,8 @@ export const dashboardQueryKeys = {
   dashboards: ["dashboard"] as const,
   session: (sessionId: string) => ["session", sessionId] as const,
   sessions: ["session"] as const,
-  apiKeys: ["apiKeys"] as const
+  apiKeys: ["apiKeys"] as const,
+  passkeys: ["passkeys"] as const
 }
 
 const runApiEffect = <A, E>(effect: Effect.Effect<A, E>, signal?: AbortSignal): Promise<A> =>
@@ -65,6 +69,13 @@ export const apiKeysQueryOptions = () => queryOptions({
   retry: retryIdempotentGet
 })
 
+export const passkeysQueryOptions = () => queryOptions({
+  queryKey: dashboardQueryKeys.passkeys,
+  queryFn: ({ signal }) => runApiEffect(getPasskeys(), signal),
+  staleTime: 30_000,
+  retry: retryIdempotentGet
+})
+
 export const useLoginMutation = () => {
   const queryClient = useQueryClient()
 
@@ -79,8 +90,23 @@ export const useRegisterPasskeyMutation = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (bootstrapToken?: string) => runApiEffect(registerPasskey(bootstrapToken)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.auth }),
+    mutationFn: (input: RegisterPasskeyInput) => runApiEffect(registerPasskey(input)),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.auth }),
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.passkeys })
+      ])
+    },
+    retry: false
+  })
+}
+
+export const useRemovePasskeyMutation = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => runApiEffect(removePasskey(id)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.passkeys }),
     retry: false
   })
 }
@@ -98,6 +124,7 @@ export const useLogoutMutation = () => {
       queryClient.removeQueries({ queryKey: dashboardQueryKeys.dashboards })
       queryClient.removeQueries({ queryKey: dashboardQueryKeys.sessions })
       queryClient.removeQueries({ queryKey: dashboardQueryKeys.apiKeys })
+      queryClient.removeQueries({ queryKey: dashboardQueryKeys.passkeys })
       await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.auth })
     },
     retry: false

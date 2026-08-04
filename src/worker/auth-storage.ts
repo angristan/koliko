@@ -6,6 +6,7 @@ export interface RegistrationWrite {
   readonly challengeExpiresAt: number
   readonly verifiedAt: number
   readonly credentialId: string
+  readonly name: string
   readonly publicKey: string
   readonly counter: number
   readonly transports: string
@@ -30,8 +31,8 @@ export const registerPasskey = async (
     ).bind(input.challengeId, attemptId, input.challengeExpiresAt, now),
     env.DB.prepare(
       `INSERT INTO passkeys
-        (credential_id, public_key, counter, transports, device_type, backed_up, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?
+        (credential_id, name, public_key, counter, transports, device_type, backed_up, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
        WHERE EXISTS (
          SELECT 1 FROM auth_challenges
          WHERE id = ? AND purpose = 'registration' AND attempt_id = ? AND expires_at > ?
@@ -39,6 +40,7 @@ export const registerPasskey = async (
        AND (? = 1 OR NOT EXISTS (SELECT 1 FROM passkeys))`
     ).bind(
       input.credentialId,
+      input.name,
       input.publicKey,
       input.counter,
       input.transports,
@@ -57,6 +59,26 @@ export const registerPasskey = async (
   if (consumed === 1 && inserted === 1) return "registered"
   if (inserted === 0) return "conflict"
   return "invariant"
+}
+
+export type PasskeyRemovalResult = "removed" | "unknown" | "final"
+
+export const removePasskey = async (
+  env: WorkerEnv,
+  credentialId: string
+): Promise<PasskeyRemovalResult> => {
+  const deletion = await env.DB.prepare(
+    `DELETE FROM passkeys
+     WHERE credential_id = ?
+       AND (SELECT COUNT(*) FROM passkeys) > 1`
+  ).bind(credentialId).run()
+
+  if ((deletion.meta.changes ?? 0) === 1) return "removed"
+
+  const exists = await env.DB.prepare(
+    "SELECT EXISTS(SELECT 1 FROM passkeys WHERE credential_id = ?) AS found"
+  ).bind(credentialId).first<number>("found")
+  return exists === 1 ? "final" : "unknown"
 }
 
 export interface AuthenticationWrite {

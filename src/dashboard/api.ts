@@ -3,6 +3,7 @@ import {
   ApiKeysResponse,
   AuthStatusResponse,
   DashboardResponse,
+  PasskeysResponse,
   SessionDetailResponse
 } from "../shared/api"
 
@@ -226,7 +227,12 @@ const createAuthenticationCredential = (options: typeof AuthenticationOptions.Ty
   })
 })
 
-export const registerPasskey = (bootstrapToken?: string) => Effect.gen(function*() {
+export interface RegisterPasskeyInput {
+  readonly name: string
+  readonly bootstrapToken?: string
+}
+
+export const registerPasskey = ({ name, bootstrapToken }: RegisterPasskeyInput) => Effect.gen(function*() {
   const headers = bootstrapToken ? { "x-bootstrap-token": bootstrapToken } : undefined
   const options = yield* request(RegistrationOptions, "/api/auth/register/options", {
     method: "POST",
@@ -236,7 +242,7 @@ export const registerPasskey = (bootstrapToken?: string) => Effect.gen(function*
   const result = yield* request(Verified, "/api/auth/register/verify", {
     method: "POST",
     headers,
-    body: JSON.stringify(credential)
+    body: JSON.stringify({ name, credential })
   })
 
   if (!result.verified) {
@@ -266,6 +272,11 @@ export const loginWithPasskey = () => Effect.gen(function*() {
 })
 
 export const logout = () => requestUnknown("/api/auth/logout", { method: "POST" })
+
+export const getPasskeys = () => request(PasskeysResponse, "/api/auth/passkeys")
+
+export const removePasskey = (id: string) =>
+  requestUnknown(`/api/auth/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" })
 
 export const getDashboard = (from: string, to: string) =>
   request(DashboardResponse, `/api/dashboard?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)

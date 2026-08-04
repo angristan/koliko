@@ -5,7 +5,9 @@ import {
   ApiDecodeError,
   ApiStatusError,
   ApiTransportError,
-  getAuthStatus
+  getAuthStatus,
+  getPasskeys,
+  removePasskey
 } from "../src/dashboard/api"
 import { retryIdempotentGet } from "../src/dashboard/queries"
 
@@ -23,6 +25,36 @@ describe("dashboard API client", () => {
     const status = yield* getAuthStatus()
 
     expect(status).toEqual({ authenticated: true, hasPasskey: true })
+  }))
+
+  it.effect("decodes named passkey metadata", () => Effect.gen(function*() {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({
+      passkeys: [{
+        id: "credential_1",
+        name: "MacBook Touch ID",
+        deviceType: "singleDevice",
+        backedUp: false,
+        createdAt: "2026-07-21T00:00:00.000Z",
+        lastUsedAt: null
+      }]
+    }), { status: 200 }))))
+
+    const result = yield* getPasskeys()
+
+    expect(result.passkeys).toHaveLength(1)
+    expect(result.passkeys[0]?.name).toBe("MacBook Touch ID")
+  }))
+
+  it.effect("encodes passkey removal identifiers", () => Effect.gen(function*() {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })))
+    vi.stubGlobal("fetch", fetchMock)
+
+    yield* removePasskey("credential/with spaces")
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/passkeys/credential%2Fwith%20spaces",
+      expect.objectContaining({ method: "DELETE" })
+    )
   }))
 
   it.effect("preserves HTTP status failures for retry policy", () => Effect.gen(function*() {

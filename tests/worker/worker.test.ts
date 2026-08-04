@@ -26,6 +26,20 @@ const sessionCookie = async (): Promise<string> => {
   return `koliko_session=${encodeURIComponent(token)}`
 }
 
+const insertPasskey = async (
+  id: string,
+  name: string,
+  createdAt: string,
+  backedUp = false,
+  lastUsedAt: string | null = null
+): Promise<void> => {
+  await env.DB.prepare(
+    `INSERT INTO passkeys
+      (credential_id, name, public_key, counter, transports, device_type, backed_up, created_at, last_used_at)
+     VALUES (?, ?, 'public-key', 0, '[]', 'singleDevice', ?, ?, ?)`
+  ).bind(id, name, backedUp ? 1 : 0, createdAt, lastUsedAt).run()
+}
+
 describe("Worker runtime", () => {
   it("does not serve static content when invoked directly", async () => {
     const response = await fetchWorker(new Request("https://example.test/"))
@@ -40,6 +54,193 @@ describe("Worker runtime", () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ authenticated: false, hasPasskey: false })
     expect(response.headers.get("cache-control")).toBe("no-store")
+  })
+
+  it("requires the named registration verify envelope", async () => {
+    const optionsResponse = await fetchWorker(new Request("https://example.test/api/auth/register/options", {
+      method: "POST",
+      headers: {
+        origin: "https://example.test",
+        "x-bootstrap-token": env.BOOTSTRAP_TOKEN
+      }
+    }))
+    expect(optionsResponse.status).toBe(200)
+    const setCookie = optionsResponse.headers.get("set-cookie")
+    expect(setCookie).not.toBeNull()
+    if (setCookie === null) return
+    const cookie = setCookie.split(";", 1)[0]
+    const credential = {
+      id: "credential_1",
+      rawId: "credential_1",
+      response: {
+        clientDataJSON: "client-data",
+        attestationObject: "attestation"
+      },
+      type: "public-key"
+    }
+    const headers = {
+      cookie,
+      origin: "https://example.test",
+      "content-type": "application/json",
+      "x-bootstrap-token": env.BOOTSTRAP_TOKEN
+    }
+
+    const unnamedResponse = await fetchWorker(new Request("https://example.test/api/auth/register/verify", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "", credential })
+    }))
+    expect(unnamedResponse.status).toBe(400)
+    expect(await unnamedResponse.json()).toEqual({
+      error: { code: "invalid_request", message: "Request payload is invalid" }
+    })
+
+    const legacyResponse = await fetchWorker(new Request("https://example.test/api/auth/register/verify", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(credential)
+    }))
+    expect(legacyResponse.status).toBe(400)
+    expect(await legacyResponse.json()).toEqual({
+      error: { code: "invalid_request", message: "Request payload is invalid" }
+    })
+  })
+
+  it("lists only safe named passkey metadata for an authenticated session", async () => {
+    await insertPasskey(
+      "credential_1",
+      "MacBook Touch ID",
+      "2026-07-20T00:00:00.000Z",
+      true,
+      "2026-07-22T00:00:00.000Z"
+    )
+    await insertPasskey("credential_2", "Security key", "2026-07-21T00:00:00.000Z")
+
+    const response = await fetchWorker(new Request("https://example.test/api/auth/passkeys", {
+      headers: { cookie: await sessionCookie() }
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      passkeys: [
+        {
+          id: "credential_1",
+          name: "MacBook Touch ID",
+          deviceType: "singleDevice",
+          backedUp: true,
+          createdAt: "2026-07-20T00:00:00.000Z",
+          lastUsedAt: "2026-07-22T00:00:00.000Z"
+        },
+        {
+          id: "credential_2",
+          name: "Security key",
+          deviceType: "singleDevice",
+          backedUp: false,
+          createdAt: "2026-07-21T00:00:00.000Z",
+          lastUsedAt: null
+        }
+      ]
+    })
+  })
+
+  it("requires authentication to manage passkeys", async () => {
+    await insertPasskey("credential_1", "MacBook", "2026-07-20T00:00:00.000Z")
+    await insertPasskey("credential_2", "Security key", "2026-07-21T00:00:00.000Z")
+
+    const listResponse = await fetchWorker(new Request("https://example.test/api/auth/passkeys"))
+    expect(listResponse.status).toBe(401)
+    expect(await listResponse.json()).toEqual({
+      error: { code: "unauthorized", message: "Passkey authentication is required" }
+    })
+
+    const deleteResponse = await fetchWorker(new Request(
+      "https://example.test/api/auth/passkeys/credential_1",
+      { method: "DELETE", headers: { origin: "https://example.test" } }
+    ))
+    expect(deleteResponse.status).toBe(401)
+    expect(await deleteResponse.json()).toEqual({
+      error: { code: "unauthorized", message: "Passkey authentication is required" }
+    })
+  })
+
+  it("removes a passkey with same-origin authenticated confirmation", async () => {
+    await insertPasskey("credential_1", "MacBook", "2026-07-20T00:00:00.000Z")
+    await insertPasskey("credential_2", "Security key", "2026-07-21T00:00:00.000Z")
+
+    const response = await fetchWorker(new Request("https://example.test/api/auth/passkeys/credential_1", {
+      method: "DELETE",
+      headers: {
+        cookie: await sessionCookie(),
+        origin: "https://example.test"
+      }
+    }))
+
+    expect(response.status).toBe(204)
+    const remaining = await env.DB.prepare("SELECT credential_id, name FROM passkeys").all()
+    expect(remaining.results).toEqual([{ credential_id: "credential_2", name: "Security key" }])
+  })
+
+  it("returns typed errors for unknown and final passkeys", async () => {
+    await insertPasskey("credential_1", "Only passkey", "2026-07-20T00:00:00.000Z")
+    const headers = {
+      cookie: await sessionCookie(),
+      origin: "https://example.test"
+    }
+
+    const unknownResponse = await fetchWorker(new Request("https://example.test/api/auth/passkeys/unknown", {
+      method: "DELETE",
+      headers
+    }))
+    expect(unknownResponse.status).toBe(404)
+    expect(await unknownResponse.json()).toEqual({
+      error: { code: "passkey_not_found", message: "Passkey was not found" }
+    })
+
+    const finalResponse = await fetchWorker(new Request("https://example.test/api/auth/passkeys/credential_1", {
+      method: "DELETE",
+      headers
+    }))
+    expect(finalResponse.status).toBe(409)
+    expect(await finalResponse.json()).toEqual({
+      error: { code: "last_passkey", message: "The final passkey cannot be removed" }
+    })
+    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkeys").first<number>("count")
+    expect(count).toBe(1)
+  })
+
+  it("atomically keeps one passkey during concurrent removals", async () => {
+    await insertPasskey("credential_1", "MacBook", "2026-07-20T00:00:00.000Z")
+    await insertPasskey("credential_2", "Security key", "2026-07-21T00:00:00.000Z")
+    const headers = {
+      cookie: await sessionCookie(),
+      origin: "https://example.test"
+    }
+
+    const responses = await Promise.all([
+      fetchWorker(new Request("https://example.test/api/auth/passkeys/credential_1", { method: "DELETE", headers })),
+      fetchWorker(new Request("https://example.test/api/auth/passkeys/credential_2", { method: "DELETE", headers }))
+    ])
+
+    expect(responses.map((response) => response.status).toSorted()).toEqual([204, 409])
+    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkeys").first<number>("count")
+    expect(count).toBe(1)
+  })
+
+  it("requires same-origin deletion requests", async () => {
+    await insertPasskey("credential_1", "MacBook", "2026-07-20T00:00:00.000Z")
+    await insertPasskey("credential_2", "Security key", "2026-07-21T00:00:00.000Z")
+
+    const response = await fetchWorker(new Request("https://example.test/api/auth/passkeys/credential_1", {
+      method: "DELETE",
+      headers: { cookie: await sessionCookie() }
+    }))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({
+      error: { code: "invalid_origin", message: "Request origin is not allowed" }
+    })
+    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkeys").first<number>("count")
+    expect(count).toBe(2)
   })
 
   it("validates and persists telemetry through D1", async () => {
@@ -188,6 +389,7 @@ describe("Worker runtime", () => {
       mode: "bootstrap" as const,
       challengeExpiresAt: verifiedAt + 60_000,
       verifiedAt,
+      name: "Bootstrap passkey",
       publicKey: "public-key",
       counter: 0,
       transports: "[]",
@@ -200,8 +402,8 @@ describe("Worker runtime", () => {
     ])
 
     expect(results.toSorted()).toEqual(["conflict", "registered"])
-    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkeys").first<number>("count")
-    expect(count).toBe(1)
+    const stored = await env.DB.prepare("SELECT name FROM passkeys").first()
+    expect(stored).toEqual({ name: "Bootstrap passkey" })
   })
 
   it("rejects concurrent reuse of an authentication challenge", async () => {
