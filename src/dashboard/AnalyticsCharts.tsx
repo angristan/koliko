@@ -36,6 +36,7 @@ import {
 } from "@phosphor-icons/react"
 import type { TooltipContentProps } from "recharts"
 import { DashboardResponse, SummaryMetrics, type DailyMetric, type UsageBreakdown } from "../shared/api"
+import type { AnalyticsSection, TrendMetric } from "./navigation"
 
 const compactNumber = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })
 const integer = new Intl.NumberFormat("en")
@@ -266,10 +267,11 @@ const trendMetrics = {
   }
 } as const
 
-type TrendMetric = keyof typeof trendMetrics
-
-function TrendExplorer({ daily }: { readonly daily: DashboardResponse["daily"] }) {
-  const [metric, setMetric] = useState<TrendMetric>("tokens")
+function TrendExplorer({ daily, metric, onMetricChange }: {
+  readonly daily: DashboardResponse["daily"]
+  readonly metric: TrendMetric
+  readonly onMetricChange: (metric: TrendMetric) => void
+}) {
   const config = trendMetrics[metric]
   const data = dailyChartData(daily).map((day) => ({ label: day.label, value: day[config.key] }))
   const total = data.reduce((sum, day) => sum + day.value, 0)
@@ -284,7 +286,7 @@ function TrendExplorer({ daily }: { readonly daily: DashboardResponse["daily"] }
         <SegmentedControl
           size="xs"
           value={metric}
-          onChange={(value) => setMetric(value as TrendMetric)}
+          onChange={(value) => onMetricChange(value as TrendMetric)}
           data={Object.entries(trendMetrics).map(([value, item]) => ({ value, label: item.label }))}
           className="chart-segmented"
         />
@@ -401,11 +403,15 @@ function RepositoryBars({ rows }: { readonly rows: DashboardResponse["repositori
   )
 }
 
-export function OverviewCharts({ dashboard }: { readonly dashboard: DashboardResponse | undefined }) {
+export function OverviewCharts({ dashboard, metric, onMetricChange }: {
+  readonly dashboard: DashboardResponse | undefined
+  readonly metric: TrendMetric
+  readonly onMetricChange: (metric: TrendMetric) => void
+}) {
   const data = dashboard
   return (
     <Stack gap="sm">
-      <TrendExplorer daily={data?.daily ?? []} />
+      <TrendExplorer daily={data?.daily ?? []} metric={metric} onMetricChange={onMetricChange} />
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
         <ModelMix rows={data?.models ?? []} />
         <RepositoryBars rows={data?.repositories ?? []} />
@@ -968,15 +974,23 @@ function FeaturesAnalytics({ dashboard }: { readonly dashboard: DashboardRespons
 
 export function AnalyticsWorkspace({
   dashboard,
-  summary
+  summary,
+  section,
+  onSectionChange
 }: {
   readonly dashboard: DashboardResponse | undefined
   readonly summary: ReactNode
+  readonly section: AnalyticsSection
+  readonly onSectionChange: (section: AnalyticsSection) => void
 }) {
   const data = dashboard ?? EMPTY_DASHBOARD
 
   return (
-    <Tabs defaultValue="usage" className="analytics-tabs">
+    <Tabs
+      value={section}
+      onChange={(value) => value && onSectionChange(value as AnalyticsSection)}
+      className="analytics-tabs"
+    >
       <ScrollArea type="never" className="analytics-tabs-scroll">
         <Tabs.List className="analytics-tabs-list">
           <Tabs.Tab value="usage" leftSection={<CoinsIcon size={15} />}>Usage</Tabs.Tab>

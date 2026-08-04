@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from "react"
+import { lazy, Suspense, useMemo, useState, type MouseEvent, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   ActionIcon,
@@ -74,8 +74,14 @@ import {
   useRemovePasskeyMutation,
   useRevokeApiKeyMutation
 } from "./queries"
-
-type Tab = "overview" | "analytics" | "sessions" | "settings"
+import {
+  dashboardHref,
+  navigateDashboard,
+  useDashboardLocation,
+  type AnalyticsSection,
+  type DashboardTab,
+  type TrendMetric
+} from "./navigation"
 
 const isoDate = (date: Date): string => date.toISOString().slice(0, 10)
 const rangeForDays = (days: number) => ({
@@ -106,7 +112,7 @@ const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback
 
-const pageTitles: Readonly<Record<Tab, { readonly title: string; readonly description?: string }>> = {
+const pageTitles: Readonly<Record<DashboardTab, { readonly title: string; readonly description?: string }>> = {
   overview: { title: "Overview", description: "See where your agent time, tokens, and spend are going." },
   analytics: { title: "Analytics", description: "Explore usage, cost, tools, sessions, and agent feature trends." },
   sessions: { title: "Sessions", description: "Inspect recent runs and their privacy-safe event metadata." },
@@ -597,10 +603,12 @@ function ChartsFallback() {
   )
 }
 
-function Overview({ dashboard, cacheRate, toolSuccess }: {
+function Overview({ dashboard, cacheRate, toolSuccess, trendMetric, onTrendMetricChange }: {
   readonly dashboard: DashboardResponse | undefined
   readonly cacheRate: number
   readonly toolSuccess: number
+  readonly trendMetric: TrendMetric
+  readonly onTrendMetricChange: (metric: TrendMetric) => void
 }) {
   const summary = dashboard?.summary
   return (
@@ -614,13 +622,18 @@ function Overview({ dashboard, cacheRate, toolSuccess }: {
         { label: "Tool success", value: formatPercent(toolSuccess), detail: `${integer.format(summary?.toolCalls ?? 0)} calls`, progress: toolSuccess * 100, color: "sage" }
       ]} />
       <Suspense fallback={<ChartsFallback />}>
-        <OverviewCharts dashboard={dashboard} />
+        <OverviewCharts dashboard={dashboard} metric={trendMetric} onMetricChange={onTrendMetricChange} />
       </Suspense>
     </Stack>
   )
 }
 
-function Analytics({ dashboard, toolSuccess }: { readonly dashboard: DashboardResponse | undefined; readonly toolSuccess: number }) {
+function Analytics({ dashboard, toolSuccess, section, onSectionChange }: {
+  readonly dashboard: DashboardResponse | undefined
+  readonly toolSuccess: number
+  readonly section: AnalyticsSection
+  readonly onSectionChange: (section: AnalyticsSection) => void
+}) {
   const summary = dashboard?.summary
   const summaryStrip = (
     <InstrumentStrip metrics={[
@@ -633,7 +646,7 @@ function Analytics({ dashboard, toolSuccess }: { readonly dashboard: DashboardRe
 
   return (
     <Suspense fallback={<ChartsFallback />}>
-      <AnalyticsWorkspace dashboard={dashboard} summary={summaryStrip} />
+      <AnalyticsWorkspace dashboard={dashboard} summary={summaryStrip} section={section} onSectionChange={onSectionChange} />
     </Suspense>
   )
 }
@@ -687,7 +700,7 @@ function Sessions({ dashboard, setSessionId }: {
   )
 }
 
-const navigation: ReadonlyArray<{ readonly tab: Tab; readonly label: string; readonly icon: typeof ActivityIcon }> = [
+const navigation: ReadonlyArray<{ readonly tab: DashboardTab; readonly label: string; readonly icon: typeof ActivityIcon }> = [
   { tab: "overview", label: "Overview", icon: ActivityIcon },
   { tab: "analytics", label: "Analytics", icon: ChartLineUpIcon },
   { tab: "sessions", label: "Sessions", icon: ListBulletsIcon },
@@ -695,9 +708,8 @@ const navigation: ReadonlyArray<{ readonly tab: Tab; readonly label: string; rea
 ]
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("overview")
-  const [days, setDays] = useState(30)
-  const [sessionId, setSessionId] = useState<string>()
+  const location = useDashboardLocation()
+  const { tab, days, sessionId, analyticsSection, trendMetric } = location
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)
   const isDesktop = useMediaQuery("(min-width: 43.75em)")
   const computedColorScheme = useComputedColorScheme("light")
@@ -749,8 +761,18 @@ export default function App() {
     : 1 - (summary?.toolErrors ?? 0) / (summary?.toolCalls ?? 1)
   const page = pageTitles[tab]
 
-  const navigate = (next: Tab) => {
-    setTab(next)
+  const navigate = (next: DashboardTab) => {
+    navigateDashboard({ ...location, tab: next, sessionId: undefined })
+  }
+
+  const followNavigation = (event: MouseEvent<HTMLElement>, next: DashboardTab) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    navigate(next)
+  }
+
+  const updateDays = (nextDays: number) => {
+    navigateDashboard({ ...location, days: nextDays as typeof days })
   }
 
   return (
@@ -779,7 +801,7 @@ export default function App() {
                   size="xs"
                   value={String(days)}
                   aria-label="Date range"
-                  onChange={(value) => setDays(Number(value))}
+                  onChange={(value) => updateDays(Number(value))}
                   data={[7, 30, 90].map((value) => ({ value: String(value), label: `${value}d` }))}
                   className="range-control header-range-control"
                 />
@@ -808,14 +830,14 @@ export default function App() {
             {navigation.map((item) => (
               <Tooltip key={item.tab} label={item.label} position="right" disabled={!desktopCollapsed}>
                 <NavLink
-                  component="button"
-                  type="button"
+                  component="a"
+                  href={dashboardHref({ ...location, tab: item.tab, sessionId: undefined })}
                   label={item.label}
                   leftSection={<item.icon size={19} weight={tab === item.tab ? "bold" : "regular"} />}
                   active={tab === item.tab}
                   aria-label={item.label}
                   aria-current={tab === item.tab ? "page" : undefined}
-                  onClick={() => navigate(item.tab)}
+                  onClick={(event) => followNavigation(event, item.tab)}
                   variant="light"
                   className="nav-item"
                 />
@@ -865,7 +887,7 @@ export default function App() {
                 size="xs"
                 value={String(days)}
                 aria-label="Date range"
-                onChange={(value) => setDays(Number(value))}
+                onChange={(value) => updateDays(Number(value))}
                 data={[7, 30, 90].map((value) => ({ value: String(value), label: `${value}d` }))}
                 className="range-control mobile-range-control"
                 fullWidth
@@ -884,9 +906,29 @@ export default function App() {
               ? <Center mih={320}><Loader type="dots" /></Center>
               : (
                 <>
-                  {tab === "overview" && <Overview dashboard={dashboard} cacheRate={cacheRate} toolSuccess={toolSuccess} />}
-                  {tab === "analytics" && <Analytics dashboard={dashboard} toolSuccess={toolSuccess} />}
-                  {tab === "sessions" && <Sessions dashboard={dashboard} setSessionId={setSessionId} />}
+                  {tab === "overview" && (
+                    <Overview
+                      dashboard={dashboard}
+                      cacheRate={cacheRate}
+                      toolSuccess={toolSuccess}
+                      trendMetric={trendMetric}
+                      onTrendMetricChange={(metric) => navigateDashboard({ ...location, trendMetric: metric })}
+                    />
+                  )}
+                  {tab === "analytics" && (
+                    <Analytics
+                      dashboard={dashboard}
+                      toolSuccess={toolSuccess}
+                      section={analyticsSection}
+                      onSectionChange={(section) => navigateDashboard({ ...location, analyticsSection: section })}
+                    />
+                  )}
+                  {tab === "sessions" && (
+                    <Sessions
+                      dashboard={dashboard}
+                      setSessionId={(nextSessionId) => navigateDashboard({ ...location, sessionId: nextSessionId })}
+                    />
+                  )}
                   {tab === "settings" && <Settings />}
                 </>
               )}
@@ -899,11 +941,13 @@ export default function App() {
           const active = tab === item.tab
           return (
             <UnstyledButton
+              component="a"
+              href={dashboardHref({ ...location, tab: item.tab, sessionId: undefined })}
               key={item.tab}
               className="mobile-bottom-nav-item"
               data-active={active || undefined}
               aria-current={active ? "page" : undefined}
-              onClick={() => navigate(item.tab)}
+              onClick={(event) => followNavigation(event, item.tab)}
             >
               <item.icon size={20} weight={active ? "bold" : "regular"} aria-hidden="true" />
               <span>{item.label}</span>
@@ -917,7 +961,7 @@ export default function App() {
         detail={sessionQuery.data}
         pending={sessionQuery.isPending}
         error={sessionQuery.error}
-        onClose={() => setSessionId(undefined)}
+        onClose={() => navigateDashboard({ ...location, sessionId: undefined })}
         onRetry={() => { void sessionQuery.refetch() }}
       />
     </AppShell>
