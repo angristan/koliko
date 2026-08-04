@@ -55,7 +55,6 @@ import {
   WarningCircleIcon
 } from "@phosphor-icons/react"
 import type { ApiKeySummary, DashboardResponse, PasskeySummary, SessionDetailResponse } from "../shared/api"
-import rooftopRefuge from "./assets/rooftop-refuge.png"
 import {
   apiKeysQueryOptions,
   authQueryOptions,
@@ -923,8 +922,6 @@ export default function App() {
           </Stack>
         </AppShell.Section>
       </AppShell.Navbar>
-
-      <img className="rooftop-refuge" src={rooftopRefuge} alt="" aria-hidden="true" />
 
       <AppShell.Main id="dashboard-main" tabIndex={-1}>
         <Box className="content-shell">
