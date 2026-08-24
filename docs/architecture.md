@@ -49,14 +49,16 @@ TanStack Query owns browser-side server-state caching, cancellation, refreshes, 
 
 ### D1
 
-D1 contains four tables:
+D1 contains four source tables:
 
 | Table | Purpose |
 | --- | --- |
 | `passkeys` | WebAuthn public credentials, counters, transports, and usage timestamps |
 | `auth_challenges` | Consumed challenge IDs, purposes, attempt IDs, and expiry timestamps |
 | `api_keys` | Key names, visible prefixes, SHA-256 hashes, revocation state, and usage timestamps |
-| `telemetry_events` | Schema-versioned event metadata used by analytics queries |
+| `telemetry_events` | Schema-versioned event metadata and analytics source of truth |
+
+Insert and delete triggers maintain derived daily, dimension, tool, feature, and session rollup tables. Dashboard queries read these bounded rollups instead of repeatedly scanning raw events. `telemetry_events.event_id` idempotency ensures a retried event cannot increment a rollup twice.
 
 The raw ingestion key and the WebAuthn private key are never stored in D1.
 

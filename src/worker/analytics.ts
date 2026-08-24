@@ -54,8 +54,6 @@ const rows = <S extends Schema.ConstraintDecoder<unknown>>(
   )
 
 interface DateRange {
-  readonly from: string
-  readonly to: string
   readonly fromDate: string
   readonly toDate: string
 }
@@ -76,10 +74,7 @@ const rangeFromRequest = (request: Request): Effect.Effect<DateRange, HttpFailur
     return yield* HttpFailure.make({ status: 400, code: "date_range_too_large", message: "Date range cannot exceed 366 days" })
   }
 
-  const toExclusive = new Date(inclusiveTo.getTime() + 24 * 60 * 60 * 1000)
   return {
-    from: from.toISOString(),
-    to: toExclusive.toISOString(),
     fromDate: from.toISOString().slice(0, 10),
     toDate: inclusiveTo.toISOString().slice(0, 10)
   }
@@ -87,137 +82,144 @@ const rangeFromRequest = (request: Request): Effect.Effect<DateRange, HttpFailur
 
 const SUMMARY_SQL = `
   SELECT
-    COUNT(DISTINCT session_id) AS sessions,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
-    COALESCE(SUM(CASE WHEN event_type = 'agent_run' THEN duration_ms ELSE 0 END), 0) AS trackedMs,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN input_tokens ELSE 0 END), 0) AS inputTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN output_tokens ELSE 0 END), 0) AS outputTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_read_tokens ELSE 0 END), 0) AS cacheReadTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_write_tokens ELSE 0 END), 0) AS cacheWriteTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS totalTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost,
-    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' THEN 1 ELSE 0 END), 0) AS toolCalls,
-    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' AND status = 'error' THEN 1 ELSE 0 END), 0) AS toolErrors,
-    COALESCE(SUM(CASE WHEN event_type = 'compaction' THEN 1 ELSE 0 END), 0) AS compactions,
-    COALESCE(SUM(CASE WHEN event_type = 'goal' THEN 1 ELSE 0 END), 0) AS goals,
-    COALESCE(SUM(CASE WHEN event_type = 'subagent' THEN 1 ELSE 0 END), 0) AS subagents
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ?`
+    (
+      SELECT COUNT(DISTINCT session_id)
+      FROM telemetry_daily_session_metrics
+      WHERE day >= ? AND day <= ?
+    ) AS sessions,
+    COALESCE(SUM(turns), 0) AS turns,
+    COALESCE(SUM(tracked_ms), 0) AS trackedMs,
+    COALESCE(SUM(input_tokens), 0) AS inputTokens,
+    COALESCE(SUM(output_tokens), 0) AS outputTokens,
+    COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+    COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+    COALESCE(SUM(total_tokens), 0) AS totalTokens,
+    COALESCE(SUM(cost), 0) AS cost,
+    COALESCE(SUM(tool_calls), 0) AS toolCalls,
+    COALESCE(SUM(tool_errors), 0) AS toolErrors,
+    COALESCE(SUM(compactions), 0) AS compactions,
+    COALESCE(SUM(goals), 0) AS goals,
+    COALESCE(SUM(subagents), 0) AS subagents
+  FROM telemetry_daily_metrics
+  WHERE day >= ? AND day <= ?`
 
 const DAILY_SQL = `
   SELECT
-    substr(occurred_at, 1, 10) AS date,
-    COUNT(DISTINCT session_id) AS sessions,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
-    COALESCE(SUM(CASE WHEN event_type = 'agent_run' THEN duration_ms ELSE 0 END), 0) AS trackedMs,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN input_tokens ELSE 0 END), 0) AS inputTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN output_tokens ELSE 0 END), 0) AS outputTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_read_tokens ELSE 0 END), 0) AS cacheReadTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cache_write_tokens ELSE 0 END), 0) AS cacheWriteTokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS tokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost,
-    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' THEN 1 ELSE 0 END), 0) AS toolCalls,
-    COALESCE(SUM(CASE WHEN event_type = 'tool_execution' AND status = 'error' THEN 1 ELSE 0 END), 0) AS toolErrors,
-    COALESCE(SUM(CASE WHEN event_type = 'compaction' THEN 1 ELSE 0 END), 0) AS compactions,
-    COALESCE(SUM(CASE WHEN event_type = 'goal' THEN 1 ELSE 0 END), 0) AS goals,
-    COALESCE(SUM(CASE WHEN event_type = 'subagent' THEN 1 ELSE 0 END), 0) AS subagents
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ?
-  GROUP BY substr(occurred_at, 1, 10)
-  ORDER BY date`
+    metrics.day AS date,
+    COALESCE(sessions.count, 0) AS sessions,
+    metrics.turns,
+    metrics.tracked_ms AS trackedMs,
+    metrics.input_tokens AS inputTokens,
+    metrics.output_tokens AS outputTokens,
+    metrics.cache_read_tokens AS cacheReadTokens,
+    metrics.cache_write_tokens AS cacheWriteTokens,
+    metrics.total_tokens AS tokens,
+    metrics.cost,
+    metrics.tool_calls AS toolCalls,
+    metrics.tool_errors AS toolErrors,
+    metrics.compactions,
+    metrics.goals,
+    metrics.subagents
+  FROM telemetry_daily_metrics AS metrics
+  LEFT JOIN (
+    SELECT day, COUNT(*) AS count
+    FROM telemetry_daily_session_metrics
+    WHERE day >= ? AND day <= ?
+    GROUP BY day
+  ) AS sessions ON sessions.day = metrics.day
+  WHERE metrics.day >= ? AND metrics.day <= ?
+  ORDER BY metrics.day`
 
-const breakdownSql = (keyExpression: string, labelExpression: string, filter = "event_type = 'usage'") => `
+const breakdownSql = () => `
+  WITH session_counts AS (
+    SELECT value, COUNT(DISTINCT session_id) AS sessions
+    FROM telemetry_daily_dimension_sessions
+    WHERE dimension = ? AND day >= ? AND day <= ?
+    GROUP BY value
+  )
   SELECT
-    ${keyExpression} AS key,
-    ${labelExpression} AS label,
-    COUNT(DISTINCT session_id) AS sessions,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' AND json_extract(attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN total_tokens ELSE 0 END), 0) AS tokens,
-    COALESCE(SUM(CASE WHEN event_type = 'usage' THEN cost_total ELSE 0 END), 0) AS cost
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ? AND ${filter}
-  GROUP BY ${keyExpression}, ${labelExpression}
+    metrics.value AS key,
+    metrics.value AS label,
+    COALESCE(session_counts.sessions, 0) AS sessions,
+    COALESCE(SUM(metrics.turns), 0) AS turns,
+    COALESCE(SUM(metrics.tokens), 0) AS tokens,
+    COALESCE(SUM(metrics.cost), 0) AS cost
+  FROM telemetry_daily_dimensions AS metrics
+  LEFT JOIN session_counts ON session_counts.value = metrics.value
+  WHERE metrics.dimension = ? AND metrics.day >= ? AND metrics.day <= ?
+  GROUP BY metrics.value
   ORDER BY cost DESC, tokens DESC`
 
 const TOOLS_SQL = `
   SELECT
-    COALESCE(tool_name, 'unknown') AS name,
-    COUNT(*) AS calls,
-    COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) AS errors,
+    name,
+    COALESCE(SUM(calls), 0) AS calls,
+    COALESCE(SUM(errors), 0) AS errors,
     COALESCE(SUM(duration_ms), 0) AS durationMs
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'tool_execution'
-  GROUP BY tool_name
+  FROM telemetry_daily_tools
+  WHERE day >= ? AND day <= ?
+  GROUP BY name_missing, name
   ORDER BY calls DESC, name
   LIMIT 50`
 
 const FEATURES_SQL = `
-  SELECT 'compaction' AS feature,
-    COALESCE(json_extract(attributes_json, '$.reason'), 'unknown') AS label,
-    COUNT(*) AS count,
-    printf('%,d tokens before', COALESCE(ROUND(AVG(CAST(json_extract(attributes_json, '$.tokensBefore') AS REAL))), 0)) AS detail
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'compaction'
-  GROUP BY 2
-  UNION ALL
-  SELECT 'goal', COALESCE(status, 'observed'), COUNT(*), 'goal lifecycle events'
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'goal'
-  GROUP BY 2
-  UNION ALL
-  SELECT 'subagent', COALESCE(json_extract(attributes_json, '$.action'), 'observed'), COUNT(*), 'sub-agent lifecycle events'
-  FROM telemetry_events
-  WHERE occurred_at >= ? AND occurred_at < ? AND event_type = 'subagent'
-  GROUP BY 2
+  SELECT
+    feature,
+    label,
+    COALESCE(SUM(count), 0) AS count,
+    CASE feature
+      WHEN 'compaction' THEN printf(
+        '%,d tokens before',
+        COALESCE(ROUND(SUM(detail_total) / NULLIF(SUM(detail_samples), 0)), 0)
+      )
+      WHEN 'goal' THEN 'goal lifecycle events'
+      ELSE 'sub-agent lifecycle events'
+    END AS detail
+  FROM telemetry_daily_features
+  WHERE day >= ? AND day <= ?
+  GROUP BY feature, label
   ORDER BY feature, count DESC`
 
 const SESSIONS_SQL = `
   SELECT
-    events.session_id AS id,
-    MIN(events.repository) AS repository,
-    MIN(events.occurred_at) AS startedAt,
-    MAX(events.occurred_at) AS endedAt,
-    COALESCE((
-      SELECT COALESCE(latest.provider, '') || '/' || latest.model
-      FROM telemetry_events AS latest
-      WHERE latest.session_id = events.session_id AND latest.model IS NOT NULL
-      ORDER BY latest.occurred_at DESC, latest.sequence DESC
-      LIMIT 1
-    ), 'unknown') AS model,
-    COALESCE(SUM(CASE WHEN events.event_type = 'usage' AND json_extract(events.attributes_json, '$.source') = 'assistant' THEN 1 ELSE 0 END), 0) AS turns,
-    COALESCE(SUM(CASE WHEN events.event_type = 'usage' THEN events.total_tokens ELSE 0 END), 0) AS tokens,
-    COALESCE(SUM(CASE WHEN events.event_type = 'usage' THEN events.cost_total ELSE 0 END), 0) AS cost,
-    COALESCE(SUM(CASE WHEN events.event_type = 'agent_run' THEN events.duration_ms ELSE 0 END), 0) AS trackedMs
-  FROM telemetry_events AS events
-  WHERE events.occurred_at >= ? AND events.occurred_at < ?
-  GROUP BY events.session_id
+    sessions.session_id AS id,
+    MIN(sessions.repository) AS repository,
+    MIN(sessions.started_at) AS startedAt,
+    MAX(sessions.ended_at) AS endedAt,
+    COALESCE(MAX(models.model), 'unknown') AS model,
+    COALESCE(SUM(sessions.turns), 0) AS turns,
+    COALESCE(SUM(sessions.tokens), 0) AS tokens,
+    COALESCE(SUM(sessions.cost), 0) AS cost,
+    COALESCE(SUM(sessions.tracked_ms), 0) AS trackedMs
+  FROM telemetry_daily_session_metrics AS sessions
+  LEFT JOIN telemetry_session_models AS models ON models.session_id = sessions.session_id
+  WHERE sessions.day >= ? AND sessions.day <= ?
+  GROUP BY sessions.session_id
   ORDER BY endedAt DESC
   LIMIT 50`
 
 export const dashboard = Effect.fn("Analytics.dashboard")(function*(request: Request, env: WorkerEnv) {
   yield* requireSession(request, env)
   const range = yield* rangeFromRequest(request)
-  const bindings = [range.from, range.to]
-  const featureBindings = [...bindings, ...bindings, ...bindings]
+  const dateBindings = [range.fromDate, range.toDate]
+  const doubledDateBindings = [...dateBindings, ...dateBindings]
+  const dimensionBindings = (dimension: "model" | "thinking" | "repository") => [
+    dimension,
+    ...dateBindings,
+    dimension,
+    ...dateBindings
+  ]
 
   const queryResults = yield* Effect.tryPromise({
     try: () => env.DB.batch([
-      statement(env, SUMMARY_SQL, bindings),
-      statement(env, DAILY_SQL, bindings),
-      statement(
-        env,
-        breakdownSql("COALESCE(provider, 'unknown') || '/' || COALESCE(model, 'unknown')", "COALESCE(provider, 'unknown') || '/' || COALESCE(model, 'unknown')"),
-        bindings
-      ),
-      statement(
-        env,
-        breakdownSql("COALESCE(thinking_level, 'unknown')", "COALESCE(thinking_level, 'unknown')"),
-        bindings
-      ),
-      statement(env, breakdownSql("repository", "repository", "1 = 1"), bindings),
-      statement(env, TOOLS_SQL, bindings),
-      statement(env, FEATURES_SQL, featureBindings),
-      statement(env, SESSIONS_SQL, bindings)
+      statement(env, SUMMARY_SQL, doubledDateBindings),
+      statement(env, DAILY_SQL, doubledDateBindings),
+      statement(env, breakdownSql(), dimensionBindings("model")),
+      statement(env, breakdownSql(), dimensionBindings("thinking")),
+      statement(env, breakdownSql(), dimensionBindings("repository")),
+      statement(env, TOOLS_SQL, dateBindings),
+      statement(env, FEATURES_SQL, dateBindings),
+      statement(env, SESSIONS_SQL, dateBindings)
     ]),
     catch: queryFailed
   })

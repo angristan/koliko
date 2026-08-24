@@ -290,6 +290,64 @@ describe("Worker runtime", () => {
     expect(stored).toEqual({ event_id: "evt_1", total_tokens: 42 })
   })
 
+  it("does not count duplicate telemetry in analytics rollups", async () => {
+    await insertApiKey()
+    const request = () => new Request("https://example.test/api/v1/events", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer klk_test_key",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        clientName: "koliko-pi-extension",
+        clientVersion: "0.1.0",
+        events: [{
+          schemaVersion: 1,
+          id: "evt_duplicate",
+          sessionId: "session_duplicate",
+          runtimeId: "runtime_duplicate",
+          sequence: 1,
+          occurredAt: "2026-07-21T12:00:00.000Z",
+          type: "usage",
+          repository: "koliko",
+          provider: "provider",
+          model: "model",
+          thinkingLevel: "high",
+          totalTokens: 42,
+          costTotal: 0.1,
+          attributes: { source: "assistant" }
+        }]
+      })
+    })
+
+    const responses = await Promise.all([fetchWorker(request()), fetchWorker(request())])
+    expect(responses.map((response) => response.status)).toEqual([202, 202])
+
+    const eventCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM telemetry_events WHERE event_id = 'evt_duplicate'"
+    ).first<number>("count")
+    expect(eventCount).toBe(1)
+
+    const dashboardResponse = await fetchWorker(new Request(
+      "https://example.test/api/dashboard?from=2026-07-21&to=2026-07-21",
+      { headers: { cookie: await sessionCookie() } }
+    ))
+    expect(dashboardResponse.status).toBe(200)
+    const dashboard = await dashboardResponse.json() as {
+      summary: { sessions: number; turns: number; totalTokens: number; cost: number }
+      models: Array<{ sessions: number; turns: number; tokens: number; cost: number }>
+    }
+    expect(dashboard.summary).toMatchObject({ sessions: 1, turns: 1, totalTokens: 42, cost: 0.1 })
+    expect(dashboard.models).toEqual([{
+      key: "provider/model",
+      label: "provider/model",
+      sessions: 1,
+      turns: 1,
+      tokens: 42,
+      cost: 0.1
+    }])
+  })
+
   it("aggregates detailed daily dimensions for charting", async () => {
     await insertApiKey()
     const baseEvent = {
@@ -343,29 +401,152 @@ describe("Worker runtime", () => {
       { headers: { cookie: await sessionCookie() } }
     ))
     expect(response.status).toBe(200)
-    const result = await response.json() as {
-      from: string
-      to: string
-      daily: ReadonlyArray<Record<string, number | string>>
+    const result = await response.json() as Record<string, unknown>
+    expect(result).toEqual({
+      from: "2026-07-21",
+      to: "2026-07-21",
+      summary: {
+        sessions: 1,
+        turns: 1,
+        trackedMs: 120_000,
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 30,
+        cacheWriteTokens: 10,
+        totalTokens: 180,
+        cost: 0.25,
+        toolCalls: 2,
+        toolErrors: 1,
+        compactions: 1,
+        goals: 1,
+        subagents: 1
+      },
+      daily: [{
+        date: "2026-07-21",
+        sessions: 1,
+        turns: 1,
+        trackedMs: 120_000,
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 30,
+        cacheWriteTokens: 10,
+        tokens: 180,
+        cost: 0.25,
+        toolCalls: 2,
+        toolErrors: 1,
+        compactions: 1,
+        goals: 1,
+        subagents: 1
+      }],
+      models: [{ key: "provider/model", label: "provider/model", sessions: 1, turns: 1, tokens: 180, cost: 0.25 }],
+      thinking: [{ key: "high", label: "high", sessions: 1, turns: 1, tokens: 180, cost: 0.25 }],
+      repositories: [{ key: "koliko", label: "koliko", sessions: 1, turns: 1, tokens: 180, cost: 0.25 }],
+      tools: [
+        { name: "bash", calls: 1, errors: 1, durationMs: 500 },
+        { name: "read", calls: 1, errors: 0, durationMs: 250 }
+      ],
+      features: [
+        { feature: "compaction", label: "manual", count: 1, detail: "50,000 tokens before" },
+        { feature: "goal", label: "completed", count: 1, detail: "goal lifecycle events" },
+        { feature: "subagent", label: "spawn", count: 1, detail: "sub-agent lifecycle events" }
+      ],
+      sessions: [{
+        id: "session_charts",
+        repository: "koliko",
+        startedAt: "2026-07-21T12:00:00.000Z",
+        endedAt: "2026-07-21T12:00:00.000Z",
+        model: "provider/model",
+        turns: 1,
+        tokens: 180,
+        cost: 0.25,
+        trackedMs: 120_000
+      }]
+    })
+  })
+
+  it("counts a cross-day session once across a dashboard range", async () => {
+    await insertApiKey()
+    const response = await fetchWorker(new Request("https://example.test/api/v1/events", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer klk_test_key",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        clientName: "koliko-pi-extension",
+        clientVersion: "0.1.0",
+        events: [
+          {
+            schemaVersion: 1,
+            id: "cross_day_1",
+            sessionId: "session_cross_day",
+            runtimeId: "runtime_cross_day",
+            sequence: 1,
+            occurredAt: "2026-07-21T23:59:59.999Z",
+            type: "usage",
+            repository: "koliko",
+            provider: "provider",
+            model: "model",
+            totalTokens: 10,
+            attributes: { source: "assistant" }
+          },
+          {
+            schemaVersion: 1,
+            id: "cross_day_2",
+            sessionId: "session_cross_day",
+            runtimeId: "runtime_cross_day",
+            sequence: 2,
+            occurredAt: "2026-07-22T00:00:00.000Z",
+            type: "usage",
+            repository: "koliko",
+            provider: "provider",
+            model: "model",
+            totalTokens: 20,
+            attributes: { source: "assistant" }
+          },
+          {
+            schemaVersion: 1,
+            id: "outside_range",
+            sessionId: "session_outside",
+            runtimeId: "runtime_outside",
+            sequence: 1,
+            occurredAt: "2026-07-23T00:00:00.000Z",
+            type: "usage",
+            repository: "other",
+            totalTokens: 100,
+            attributes: { source: "assistant" }
+          }
+        ]
+      })
+    }))
+    expect(response.status).toBe(202)
+
+    const dashboardResponse = await fetchWorker(new Request(
+      "https://example.test/api/dashboard?from=2026-07-21&to=2026-07-22",
+      { headers: { cookie: await sessionCookie() } }
+    ))
+    expect(dashboardResponse.status).toBe(200)
+    const dashboard = await dashboardResponse.json() as {
+      summary: { sessions: number; turns: number; totalTokens: number }
+      daily: Array<{ sessions: number }>
+      models: Array<{ sessions: number; turns: number; tokens: number }>
+      sessions: Array<{ id: string; turns: number; tokens: number }>
     }
-    expect({ from: result.from, to: result.to }).toEqual({ from: "2026-07-21", to: "2026-07-21" })
-    expect(result.daily).toEqual([{
-      date: "2026-07-21",
+    expect(dashboard.summary).toMatchObject({ sessions: 1, turns: 2, totalTokens: 30 })
+    expect(dashboard.daily.map((day) => day.sessions)).toEqual([1, 1])
+    expect(dashboard.models).toEqual([{
+      key: "provider/model",
+      label: "provider/model",
       sessions: 1,
-      turns: 1,
-      trackedMs: 120_000,
-      inputTokens: 100,
-      outputTokens: 40,
-      cacheReadTokens: 30,
-      cacheWriteTokens: 10,
-      tokens: 180,
-      cost: 0.25,
-      toolCalls: 2,
-      toolErrors: 1,
-      compactions: 1,
-      goals: 1,
-      subagents: 1
+      turns: 2,
+      tokens: 30,
+      cost: 0
     }])
+    expect(dashboard.sessions).toEqual([expect.objectContaining({
+      id: "session_cross_day",
+      turns: 2,
+      tokens: 30
+    })])
   })
 
   it("rejects invalid telemetry before persistence", async () => {

@@ -39,6 +39,32 @@ export default defineConfig({
           include: ["tests/worker/**/*.test.ts"],
           setupFiles: ["tests/worker/setup.ts"]
         }
+      }),
+      defineProject({
+        plugins: [
+          cloudflareTest({
+            main: "./src/worker/index.ts",
+            miniflare: {
+              compatibilityDate: "2026-07-22",
+              compatibilityFlags: ["nodejs_compat"],
+              d1Databases: ["DB"],
+              bindings: {
+                RP_NAME: "Koliko",
+                RP_ID: "example.test",
+                EXPECTED_ORIGIN: "https://example.test",
+                BOOTSTRAP_TOKEN: "test-bootstrap-token-with-sufficient-entropy",
+                SESSION_SECRET: "test-session-secret-with-sufficient-entropy"
+              }
+            }
+          })
+        ],
+        define: {
+          TEST_D1_MIGRATIONS: JSON.stringify(migrations)
+        },
+        test: {
+          name: "migrations",
+          include: ["tests/migrations/**/*.test.ts"]
+        }
       })
     ],
     coverage: {
