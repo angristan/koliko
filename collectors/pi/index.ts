@@ -1,372 +1,125 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
-import { basename } from "node:path"
-import { Effect, Schema } from "effect"
-import { TelemetryEvent, TelemetryEventType, ThinkingLevel } from "../../src/shared/protocol"
-import { configPath, loadConfig, saveBaseUrl, spoolPath, type LoadedConfig } from "./config"
-import { DeliveryMonitor } from "./delivery-monitor"
-import { createDeliveryStatusFeedback } from "./delivery-status"
-import { TelemetryQueue } from "./queue"
+import type {
+  AgentSettledEvent,
+  AgentStartEvent,
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  MessageEndEvent,
+  SessionCompactEvent,
+  SessionShutdownEvent,
+  SessionStartEvent,
+  SessionTreeEvent,
+  ToolExecutionEndEvent,
+  ToolExecutionStartEvent
+} from "@earendil-works/pi-coding-agent"
 
-const FLUSH_INTERVAL_MS = 15_000
-
-const UsagePayload = Schema.Struct({
-  input: Schema.Number,
-  output: Schema.Number,
-  cacheRead: Schema.Number,
-  cacheWrite: Schema.Number,
-  totalTokens: Schema.Number,
-  cost: Schema.Struct({ total: Schema.Number })
-})
-
-type UsageShape = typeof UsagePayload.Type
-type ThinkingLevelValue = typeof ThinkingLevel.Type
-type EventType = typeof TelemetryEventType.Type
-
-interface EventFields {
-  readonly provider?: string
-  readonly model?: string
-  readonly thinkingLevel?: ThinkingLevelValue
-  readonly durationMs?: number
-  readonly inputTokens?: number
-  readonly outputTokens?: number
-  readonly cacheReadTokens?: number
-  readonly cacheWriteTokens?: number
-  readonly totalTokens?: number
-  readonly costTotal?: number
-  readonly toolName?: string
-  readonly status?: string
-  readonly attributes?: Readonly<Record<string, string | number | boolean | null>>
+export interface CollectorModelSelectEvent {
+  readonly model: { readonly provider: string; readonly id: string }
+  readonly source: "set" | "cycle" | "restore"
 }
 
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-
-const stringProperty = (value: unknown, key: string): string | undefined => {
-  if (!isRecord(value)) return undefined
-  const property = value[key]
-  return typeof property === "string" ? property : undefined
+export interface CollectorThinkingLevelSelectEvent {
+  readonly level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
 }
 
-const arrayLength = (value: unknown, key: string): number | undefined => {
-  if (!isRecord(value)) return undefined
-  const property = value[key]
-  return Array.isArray(property) ? property.length : undefined
+/** Runtime contract kept in the lightweight entrypoint so Pi can register every
+ * event bridge before loading Effect, schemas, and the durable queue. */
+export interface CollectorRuntime {
+  sessionStart(event: SessionStartEvent, ctx: ExtensionContext): Promise<void>
+  agentStart(event: AgentStartEvent, ctx: ExtensionContext): void
+  agentSettled(event: AgentSettledEvent, ctx: ExtensionContext): Promise<void>
+  messageEnd(event: MessageEndEvent, ctx: ExtensionContext): Promise<void>
+  modelSelect(event: CollectorModelSelectEvent, ctx: ExtensionContext): Promise<void>
+  thinkingLevelSelect(event: CollectorThinkingLevelSelectEvent, ctx: ExtensionContext): Promise<void>
+  sessionCompact(event: SessionCompactEvent, ctx: ExtensionContext): Promise<void>
+  sessionTree(event: SessionTreeEvent, ctx: ExtensionContext): Promise<void>
+  toolExecutionStart(event: ToolExecutionStartEvent, ctx: ExtensionContext): void
+  toolExecutionEnd(event: ToolExecutionEndEvent, ctx: ExtensionContext): Promise<void>
+  sessionShutdown(event: SessionShutdownEvent, ctx: ExtensionContext): Promise<void>
+  configureCommand(args: string, ctx: ExtensionCommandContext): Promise<void>
+  statusCommand(args: string, ctx: ExtensionCommandContext): void
+  flushCommand(args: string, ctx: ExtensionCommandContext): Promise<void>
 }
 
-const usageProperty = async (value: unknown): Promise<UsageShape | undefined> => {
-  if (!isRecord(value) || value.usage === undefined) return undefined
-  try {
-    return await Schema.decodeUnknownPromise(UsagePayload)(value.usage)
-  } catch {
-    return undefined
-  }
+export interface KolikoExtensionOptions {
+  loadRuntime?: (pi: ExtensionAPI) => Promise<CollectorRuntime>
+  defer?: (start: () => void) => void
 }
 
-const unknownProperty = (value: unknown, key: string): unknown =>
-  isRecord(value) ? value[key] : undefined
+const loadRuntime = async (pi: ExtensionAPI): Promise<CollectorRuntime> => {
+  const { createKolikoRuntime } = await import("./runtime")
+  return createKolikoRuntime(pi)
+}
 
-const flushWithin = Effect.fn("PiCollector.flushWithin")(function*(
-  flush: (signal: AbortSignal) => Promise<number>,
-  milliseconds: number
-) {
-  yield* Effect.raceFirst(
-    Effect.tryPromise({ try: flush, catch: () => undefined }).pipe(Effect.ignore),
-    Effect.sleep(milliseconds)
-  )
-})
+const deferUntilAfterStartup = (start: () => void): void => {
+  setTimeout(start, 0)
+}
 
-export default function kolikoExtension(pi: ExtensionAPI) {
-  let config: LoadedConfig | undefined
-  let queue: TelemetryQueue | undefined
-  let timer: ReturnType<typeof setInterval> | undefined
-  let activeContext: ExtensionContext | undefined
-  let sessionId = "unknown"
-  let runtimeId = crypto.randomUUID()
-  let repository = "unknown"
-  let sequence = 0
-  let runtimeStartedAt = Date.now()
-  let agentStartedAt: number | undefined
-  let provider: string | undefined
-  let model: string | undefined
-  let thinkingLevel: ThinkingLevelValue = "off"
-  const toolExecutions = new Map<string, { readonly startedAt: number; readonly args: unknown }>()
-  const deliveryMonitor = new DeliveryMonitor(createDeliveryStatusFeedback(
-    () => activeContext?.hasUI ? activeContext.ui : undefined
-  ))
+/**
+ * Register dependency-light bridges immediately, then initialize the collector
+ * after Pi has mounted its TUI. Later events await the same initialization, so
+ * telemetry is not lost when a prompt arrives before background startup ends.
+ */
+export function registerKolikoExtension(
+  pi: ExtensionAPI,
+  options: KolikoExtensionOptions = {}
+): void {
+  const runtimeLoader = options.loadRuntime ?? loadRuntime
+  const defer = options.defer ?? deferUntilAfterStartup
+  let runtimePromise: Promise<CollectorRuntime> | undefined
+  let sessionReady: Promise<CollectorRuntime> | undefined
 
-  const flushQueue = (signal?: AbortSignal): Promise<number> =>
-    queue ? deliveryMonitor.flush(queue, signal) : Promise.resolve(0)
-
-  const flushInBackground = (): void => {
-    void flushQueue().catch(() => undefined)
+  const getRuntime = (): Promise<CollectorRuntime> => {
+    runtimePromise ??= runtimeLoader(pi)
+    return runtimePromise
   }
 
-  const record = async (
-    type: EventType,
-    fields: EventFields = {}
-  ): Promise<void> => {
-    if (!queue) return
-    sequence += 1
-    const event = TelemetryEvent.make({
-      schemaVersion: 1,
-      id: crypto.randomUUID(),
-      sessionId,
-      runtimeId,
-      sequence,
-      occurredAt: new Date().toISOString(),
-      type,
-      repository,
-      ...(fields.provider !== undefined ? { provider: fields.provider } : {}),
-      ...(fields.model !== undefined ? { model: fields.model } : {}),
-      ...(fields.thinkingLevel !== undefined ? { thinkingLevel: fields.thinkingLevel } : {}),
-      ...(fields.durationMs !== undefined ? { durationMs: fields.durationMs } : {}),
-      ...(fields.inputTokens !== undefined ? { inputTokens: fields.inputTokens } : {}),
-      ...(fields.outputTokens !== undefined ? { outputTokens: fields.outputTokens } : {}),
-      ...(fields.cacheReadTokens !== undefined ? { cacheReadTokens: fields.cacheReadTokens } : {}),
-      ...(fields.cacheWriteTokens !== undefined ? { cacheWriteTokens: fields.cacheWriteTokens } : {}),
-      ...(fields.totalTokens !== undefined ? { totalTokens: fields.totalTokens } : {}),
-      ...(fields.costTotal !== undefined ? { costTotal: fields.costTotal } : {}),
-      ...(fields.toolName !== undefined ? { toolName: fields.toolName } : {}),
-      ...(fields.status !== undefined ? { status: fields.status } : {}),
-      ...(fields.attributes !== undefined ? { attributes: fields.attributes } : {})
-    })
-    await queue.enqueue(event)
+  const withRuntime = async <A>(run: (runtime: CollectorRuntime) => A | Promise<A>): Promise<A> =>
+    run(await (sessionReady ?? getRuntime()))
 
-    if (sequence % 25 === 0) flushInBackground()
-  }
-
-  const recordUsage = (
-    usage: UsageShape,
-    source: "assistant" | "tool" | "compaction" | "branch_summary",
-    actualProvider = provider,
-    actualModel = model
-  ): Promise<void> => record("usage", {
-    ...(actualProvider !== undefined ? { provider: actualProvider } : {}),
-    ...(actualModel !== undefined ? { model: actualModel } : {}),
-    thinkingLevel,
-    inputTokens: usage.input,
-    outputTokens: usage.output,
-    cacheReadTokens: usage.cacheRead,
-    cacheWriteTokens: usage.cacheWrite,
-    totalTokens: usage.totalTokens,
-    costTotal: usage.cost.total,
-    attributes: { source }
-  })
-
-  const configure = async (): Promise<void> => {
-    config = await loadConfig()
-    queue = config ? new TelemetryQueue(config, spoolPath) : undefined
-    if (!queue) {
-      deliveryMonitor.reset()
-      if (activeContext?.hasUI) activeContext.ui.setStatus("koliko-delivery", undefined)
-    }
-  }
-
-  pi.on("session_start", async (event, ctx) => {
-    activeContext = ctx
-    await configure()
-    if (!queue) return
-
-    sessionId = ctx.sessionManager.getSessionId()
-    runtimeId = crypto.randomUUID()
-    sequence = 0
-    runtimeStartedAt = Date.now()
-    agentStartedAt = undefined
-    provider = ctx.model?.provider
-    model = ctx.model?.id
-    thinkingLevel = pi.getThinkingLevel()
-
-    const gitRoot = await pi.exec("git", ["rev-parse", "--show-toplevel"], { timeout: 3_000 })
-    repository = basename(gitRoot.code === 0 && gitRoot.stdout.trim() ? gitRoot.stdout.trim() : ctx.cwd)
-
-    await record("runtime_started", {
-      ...(provider !== undefined ? { provider } : {}),
-      ...(model !== undefined ? { model } : {}),
-      thinkingLevel,
-      attributes: { reason: event.reason, mode: ctx.mode }
-    })
-
-    if (timer) clearInterval(timer)
-    timer = setInterval(flushInBackground, FLUSH_INTERVAL_MS)
-    flushInBackground()
-  })
-
-  pi.on("agent_start", async () => {
-    if (agentStartedAt === undefined) agentStartedAt = Date.now()
-  })
-
-  pi.on("agent_settled", async () => {
-    if (agentStartedAt === undefined) return
-    const durationMs = Date.now() - agentStartedAt
-    agentStartedAt = undefined
-    await record("agent_run", {
-      ...(provider !== undefined ? { provider } : {}),
-      ...(model !== undefined ? { model } : {}),
-      thinkingLevel,
-      durationMs
-    })
-    flushInBackground()
-  })
-
-  pi.on("message_end", async (event) => {
-    if (event.message.role === "assistant") {
-      await recordUsage(event.message.usage, "assistant", event.message.provider, event.message.model)
-      return
-    }
-    if (event.message.role === "toolResult") {
-      const usage = await usageProperty(event.message)
-      if (usage) await recordUsage(usage, "tool")
-    }
-  })
-
-  pi.on("model_select", async (event) => {
-    provider = event.model.provider
-    model = event.model.id
-    await record("model_selected", {
-      provider,
-      model,
-      thinkingLevel,
-      attributes: { source: event.source }
-    })
-  })
-
-  pi.on("thinking_level_select", async (event) => {
-    thinkingLevel = event.level
-    await record("thinking_selected", {
-      ...(provider !== undefined ? { provider } : {}),
-      ...(model !== undefined ? { model } : {}),
-      thinkingLevel
-    })
-  })
-
-  pi.on("session_compact", async (event) => {
-    await record("compaction", {
-      ...(provider !== undefined ? { provider } : {}),
-      ...(model !== undefined ? { model } : {}),
-      thinkingLevel,
-      attributes: {
-        reason: event.reason,
-        willRetry: event.willRetry,
-        tokensBefore: event.compactionEntry.tokensBefore,
-        fromExtension: event.fromExtension
-      }
-    })
-    const usage = await usageProperty(event.compactionEntry)
-    if (usage) await recordUsage(usage, "compaction")
-  })
-
-  pi.on("session_tree", async (event) => {
-    const usage = await usageProperty(unknownProperty(event, "summaryEntry"))
-    if (usage) await recordUsage(usage, "branch_summary")
-  })
-
-  pi.on("tool_execution_start", async (event) => {
-    toolExecutions.set(event.toolCallId, { startedAt: Date.now(), args: event.args })
-  })
-
-  pi.on("tool_execution_end", async (event) => {
-    const execution = toolExecutions.get(event.toolCallId)
-    toolExecutions.delete(event.toolCallId)
-    const durationMs = execution === undefined ? 0 : Date.now() - execution.startedAt
-
-    await record("tool_execution", {
-      ...(provider !== undefined ? { provider } : {}),
-      ...(model !== undefined ? { model } : {}),
-      thinkingLevel,
-      toolName: event.toolName,
-      durationMs,
-      status: event.isError ? "error" : "success"
-    })
-
-    if (event.toolName.startsWith("goal_")) {
-      const action = event.toolName.slice("goal_".length)
-      await record("goal", {
-        toolName: event.toolName,
-        status: event.isError ? "error" : action,
-        attributes: { action }
+  pi.on("session_start", (event, ctx) => {
+    sessionReady = new Promise<void>((resolve) => defer(resolve))
+      .then(getRuntime)
+      .then(async (runtime) => {
+        await runtime.sessionStart(event, ctx)
+        return runtime
       })
-    }
 
-    if (event.toolName === "agents" || event.toolName === "subagent") {
-      const action = stringProperty(execution?.args, "action")
-        ?? (arrayLength(execution?.args, "tasks") !== undefined ? "parallel" : undefined)
-        ?? (arrayLength(execution?.args, "chain") !== undefined ? "chain" : "single")
-      const count = arrayLength(execution?.args, "tasks")
-        ?? arrayLength(execution?.args, "chain")
-        ?? 1
-      await record("subagent", {
-        toolName: event.toolName,
-        status: event.isError ? "error" : "success",
-        durationMs,
-        attributes: { action, count }
-      })
-    }
-  })
-
-  pi.on("session_shutdown", async (event) => {
-    if (timer) clearInterval(timer)
-    timer = undefined
-    if (!queue) return
-
-    await record("runtime_ended", {
-      ...(provider !== undefined ? { provider } : {}),
-      ...(model !== undefined ? { model } : {}),
-      thinkingLevel,
-      durationMs: Date.now() - runtimeStartedAt,
-      attributes: { reason: event.reason }
+    // session_start must stay non-blocking, but background failures still need
+    // visible diagnostics and a rejection for the next event or command.
+    void sessionReady.catch((error: unknown) => {
+      ctx.ui.notify(
+        error instanceof Error ? `Koliko initialization failed: ${error.message}` : "Koliko initialization failed",
+        "error"
+      )
     })
-    await Effect.runPromise(flushWithin((signal) => flushQueue(signal), 2_000))
   })
+
+  pi.on("agent_start", (event, ctx) => withRuntime((runtime) => runtime.agentStart(event, ctx)))
+  pi.on("agent_settled", (event, ctx) => withRuntime((runtime) => runtime.agentSettled(event, ctx)))
+  pi.on("message_end", (event, ctx) => withRuntime((runtime) => runtime.messageEnd(event, ctx)))
+  pi.on("model_select", (event, ctx) => withRuntime((runtime) => runtime.modelSelect(event, ctx)))
+  pi.on("thinking_level_select", (event, ctx) => withRuntime((runtime) => runtime.thinkingLevelSelect(event, ctx)))
+  pi.on("session_compact", (event, ctx) => withRuntime((runtime) => runtime.sessionCompact(event, ctx)))
+  pi.on("session_tree", (event, ctx) => withRuntime((runtime) => runtime.sessionTree(event, ctx)))
+  pi.on("tool_execution_start", (event, ctx) => withRuntime((runtime) => runtime.toolExecutionStart(event, ctx)))
+  pi.on("tool_execution_end", (event, ctx) => withRuntime((runtime) => runtime.toolExecutionEnd(event, ctx)))
+  pi.on("session_shutdown", (event, ctx) => withRuntime((runtime) => runtime.sessionShutdown(event, ctx)))
 
   pi.registerCommand("koliko-config", {
     description: "Set the Koliko service URL (API key stays in KOLIKO_API_KEY or the private config file)",
-    handler: async (args, ctx) => {
-      const url = args.trim()
-      if (!url) {
-        ctx.ui.notify(`Usage: /koliko-config https://koliko.example.com\nConfig: ${configPath}`, "info")
-        return
-      }
-      try {
-        await saveBaseUrl(url)
-        await configure()
-        ctx.ui.notify(
-          queue
-            ? "Koliko configured and enabled."
-            : `Service URL saved. Set KOLIKO_API_KEY or add apiKey to ${configPath}.`,
-          "info"
-        )
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : "Could not save Koliko configuration", "error")
-      }
-    }
+    handler: (args, ctx) => withRuntime((runtime) => runtime.configureCommand(args, ctx))
   })
 
   pi.registerCommand("koliko-status", {
     description: "Show Koliko connection status",
-    handler: async (_args, ctx) => {
-      ctx.ui.notify(
-        queue
-          ? `Enabled: ${config?.baseUrl}\nDelivery: ${deliveryMonitor.isFailing ? "failing; events remain queued" : "no failure detected"}.\nRepository labels use folder names only.`
-          : `Disabled. Set KOLIKO_URL and KOLIKO_API_KEY, or configure ${configPath}.`,
-        "info"
-      )
-    }
+    handler: (args, ctx) => withRuntime((runtime) => runtime.statusCommand(args, ctx))
   })
 
   pi.registerCommand("koliko-flush", {
     description: "Send queued Koliko events now",
-    handler: async (_args, ctx) => {
-      if (!queue) {
-        ctx.ui.notify("Koliko is not configured.", "warning")
-        return
-      }
-      try {
-        activeContext = ctx
-        const sent = await flushQueue()
-        ctx.ui.notify(`Sent ${sent} queued event${sent === 1 ? "" : "s"}.`, "info")
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : "Koliko flush failed", "error")
-      }
-    }
+    handler: (args, ctx) => withRuntime((runtime) => runtime.flushCommand(args, ctx))
   })
 }
+
+export default registerKolikoExtension

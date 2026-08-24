@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
-import { Schema } from "effect"
+import * as Schema from "effect/Schema"
 
 const KolikoConfig = Schema.Struct({
   baseUrl: Schema.NonEmptyString,
