@@ -11,7 +11,7 @@ This document describes the schema enforced by the Pi collector and the Worker. 
 - Random event, session, and runtime identifiers
 - Per-runtime sequence number
 - Event occurrence and receipt timestamps
-- Active agent duration
+- Active agent duration, elapsed agent span, and extension UI wait duration
 - Repository folder name
 
 Repository identity is the basename of the Git root. When no Git root is available, the current working-directory basename is used.
@@ -41,6 +41,7 @@ Lifecycle attributes are scalar metadata defined by the collector. Arbitrary nes
 The Pi collector does not send:
 
 - user prompts;
+- extension UI prompt titles or responses;
 - assistant responses;
 - reasoning or thinking content;
 - source code or file contents;
@@ -53,7 +54,7 @@ The Pi collector does not send:
 - goal objectives;
 - sub-agent task text.
 
-The collector may temporarily receive some of this information from Pi lifecycle callbacks, but it does not place it in telemetry events. For example, tool arguments are held only long enough to derive a sub-agent lifecycle action and count; the arguments themselves are not serialized.
+The collector may temporarily receive some of this information from Pi lifecycle callbacks, but it does not place it in telemetry events. For example, tool arguments are held only long enough to derive a sub-agent lifecycle action and count, and UI prompt events are used only to measure waiting time. Tool arguments, prompt titles, and responses are not serialized.
 
 ## Enforcement points
 
