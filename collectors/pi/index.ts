@@ -10,7 +10,9 @@ import type {
   SessionStartEvent,
   SessionTreeEvent,
   ToolExecutionEndEvent,
-  ToolExecutionStartEvent
+  ToolExecutionStartEvent,
+  UIPromptEndEvent,
+  UIPromptStartEvent
 } from "@earendil-works/pi-coding-agent"
 
 export interface CollectorModelSelectEvent {
@@ -28,6 +30,8 @@ export interface CollectorRuntime {
   sessionStart(event: SessionStartEvent, ctx: ExtensionContext): Promise<void>
   agentStart(event: AgentStartEvent, ctx: ExtensionContext): void
   agentSettled(event: AgentSettledEvent, ctx: ExtensionContext): Promise<void>
+  uiPromptStart(event: UIPromptStartEvent, ctx: ExtensionContext): void
+  uiPromptEnd(event: UIPromptEndEvent, ctx: ExtensionContext): void
   messageEnd(event: MessageEndEvent, ctx: ExtensionContext): Promise<void>
   modelSelect(event: CollectorModelSelectEvent, ctx: ExtensionContext): Promise<void>
   thinkingLevelSelect(event: CollectorThinkingLevelSelectEvent, ctx: ExtensionContext): Promise<void>
@@ -97,6 +101,8 @@ export function registerKolikoExtension(
 
   pi.on("agent_start", (event, ctx) => withRuntime((runtime) => runtime.agentStart(event, ctx)))
   pi.on("agent_settled", (event, ctx) => withRuntime((runtime) => runtime.agentSettled(event, ctx)))
+  pi.on("ui_prompt_start", (event, ctx) => withRuntime((runtime) => runtime.uiPromptStart(event, ctx)))
+  pi.on("ui_prompt_end", (event, ctx) => withRuntime((runtime) => runtime.uiPromptEnd(event, ctx)))
   pi.on("message_end", (event, ctx) => withRuntime((runtime) => runtime.messageEnd(event, ctx)))
   pi.on("model_select", (event, ctx) => withRuntime((runtime) => runtime.modelSelect(event, ctx)))
   pi.on("thinking_level_select", (event, ctx) => withRuntime((runtime) => runtime.thinkingLevelSelect(event, ctx)))

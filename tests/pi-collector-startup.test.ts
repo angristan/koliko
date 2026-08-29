@@ -8,22 +8,27 @@ import {
 type Handler = (event: any, ctx: any) => unknown
 type CommandHandler = (args: string, ctx: any) => unknown
 
-const createRuntime = (): CollectorRuntime => ({
-  sessionStart: vi.fn(async () => undefined),
-  agentStart: vi.fn(() => undefined),
-  agentSettled: vi.fn(async () => undefined),
-  messageEnd: vi.fn(async () => undefined),
-  modelSelect: vi.fn(async () => undefined),
-  thinkingLevelSelect: vi.fn(async () => undefined),
-  sessionCompact: vi.fn(async () => undefined),
-  sessionTree: vi.fn(async () => undefined),
-  toolExecutionStart: vi.fn(() => undefined),
-  toolExecutionEnd: vi.fn(async () => undefined),
-  sessionShutdown: vi.fn(async () => undefined),
-  configureCommand: vi.fn(async () => undefined),
-  statusCommand: vi.fn(() => undefined),
-  flushCommand: vi.fn(async () => undefined)
-})
+const createRuntime = (): CollectorRuntime => {
+  const runtime = {
+    sessionStart: vi.fn(async () => undefined),
+    agentStart: vi.fn(() => undefined),
+    agentSettled: vi.fn(async () => undefined),
+    uiPromptStart: vi.fn(() => undefined),
+    uiPromptEnd: vi.fn(() => undefined),
+    messageEnd: vi.fn(async () => undefined),
+    modelSelect: vi.fn(async () => undefined),
+    thinkingLevelSelect: vi.fn(async () => undefined),
+    sessionCompact: vi.fn(async () => undefined),
+    sessionTree: vi.fn(async () => undefined),
+    toolExecutionStart: vi.fn(() => undefined),
+    toolExecutionEnd: vi.fn(async () => undefined),
+    sessionShutdown: vi.fn(async () => undefined),
+    configureCommand: vi.fn(async () => undefined),
+    statusCommand: vi.fn(() => undefined),
+    flushCommand: vi.fn(async () => undefined)
+  }
+  return runtime
+}
 
 const createPi = () => {
   const handlers = new Map<string, Handler>()
@@ -70,6 +75,25 @@ describe("Koliko Pi collector startup", () => {
     expect(vi.mocked(runtime.sessionStart).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(runtime.agentStart).mock.invocationCallOrder[0]
     )
+  })
+
+  it("forwards UI prompt spans to the runtime", async () => {
+    const runtime = createRuntime()
+    const { pi, handlers } = createPi()
+
+    registerKolikoExtension(pi, {
+      loadRuntime: async () => runtime,
+      defer: (start) => start()
+    })
+
+    handlers.get("session_start")?.({ type: "session_start", reason: "startup" }, context)
+    const start = { type: "ui_prompt_start", reason: "ui_prompt", kind: "input", title: "Sensitive question" }
+    const end = { type: "ui_prompt_end", reason: "ui_prompt", kind: "input", title: "Sensitive question" }
+    await handlers.get("ui_prompt_start")?.(start, context)
+    await handlers.get("ui_prompt_end")?.(end, context)
+
+    expect(runtime.uiPromptStart).toHaveBeenCalledWith(start, context)
+    expect(runtime.uiPromptEnd).toHaveBeenCalledWith(end, context)
   })
 
   it("registers commands before the runtime is loaded", async () => {

@@ -11,7 +11,9 @@ import type {
   SessionStartEvent,
   SessionTreeEvent,
   ToolExecutionEndEvent,
-  ToolExecutionStartEvent
+  ToolExecutionStartEvent,
+  UIPromptEndEvent,
+  UIPromptStartEvent
 } from "@earendil-works/pi-coding-agent"
 import * as Effect from "effect/Effect"
 import * as Schema from "effect/Schema"
@@ -111,6 +113,8 @@ export class KolikoRuntime {
   private sequence = 0
   private runtimeStartedAt = Date.now()
   private agentStartedAt: number | undefined
+  private uiPromptStartedAt: number | undefined
+  private uiPromptWaitMs = 0
   private provider: string | undefined
   private model: string | undefined
   private thinkingLevel: ThinkingLevelValue = "off"
@@ -200,6 +204,8 @@ export class KolikoRuntime {
     this.sequence = 0
     this.runtimeStartedAt = Date.now()
     this.agentStartedAt = undefined
+    this.uiPromptStartedAt = undefined
+    this.uiPromptWaitMs = 0
     this.provider = ctx.model?.provider
     this.model = ctx.model?.id
     this.thinkingLevel = this.pi.getThinkingLevel()
@@ -220,18 +226,46 @@ export class KolikoRuntime {
   }
 
   agentStart(_event: AgentStartEvent, _ctx: ExtensionContext): void {
-    if (this.agentStartedAt === undefined) this.agentStartedAt = Date.now()
+    if (this.agentStartedAt !== undefined) return
+    this.agentStartedAt = Date.now()
+    this.uiPromptStartedAt = undefined
+    this.uiPromptWaitMs = 0
+  }
+
+  uiPromptStart(_event: UIPromptStartEvent, _ctx: ExtensionContext): void {
+    // Prompt titles can contain user-authored content. Treat this event only as
+    // a timing boundary and never copy its payload into telemetry.
+    if (this.agentStartedAt === undefined || this.uiPromptStartedAt !== undefined) return
+    this.uiPromptStartedAt = Date.now()
+  }
+
+  uiPromptEnd(_event: UIPromptEndEvent, _ctx: ExtensionContext): void {
+    if (this.agentStartedAt === undefined || this.uiPromptStartedAt === undefined) return
+    this.uiPromptWaitMs += Math.max(0, Date.now() - this.uiPromptStartedAt)
+    this.uiPromptStartedAt = undefined
   }
 
   async agentSettled(_event: AgentSettledEvent, _ctx: ExtensionContext): Promise<void> {
     if (this.agentStartedAt === undefined) return
-    const durationMs = Date.now() - this.agentStartedAt
+
+    const settledAt = Date.now()
+    const elapsedMs = Math.max(0, settledAt - this.agentStartedAt)
+    const openPromptWaitMs = this.uiPromptStartedAt === undefined
+      ? 0
+      : Math.max(0, settledAt - this.uiPromptStartedAt)
+    const uiPromptWaitMs = Math.min(elapsedMs, this.uiPromptWaitMs + openPromptWaitMs)
+    const durationMs = elapsedMs - uiPromptWaitMs
+
     this.agentStartedAt = undefined
+    this.uiPromptStartedAt = undefined
+    this.uiPromptWaitMs = 0
+
     await this.record("agent_run", {
       ...(this.provider !== undefined ? { provider: this.provider } : {}),
       ...(this.model !== undefined ? { model: this.model } : {}),
       thinkingLevel: this.thinkingLevel,
-      durationMs
+      durationMs,
+      ...(uiPromptWaitMs > 0 ? { attributes: { elapsedMs, uiPromptWaitMs } } : {})
     })
     this.flushInBackground()
   }
