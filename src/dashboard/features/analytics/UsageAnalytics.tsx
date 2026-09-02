@@ -3,7 +3,7 @@ import { BarChart, BarsList, Heatmap } from "@mantine/charts"
 import { ActivityIcon, CoinsIcon, SparkleIcon } from "@phosphor-icons/react"
 import type { DashboardResponse } from "../../../shared/api"
 import {
-  ChartEmpty, ChartPanel, commonXAxisProps, commonYAxisProps, compactNumber, dailyChartData,
+  ChartEmpty, ChartPanel, commonLegendProps, commonXAxisProps, commonYAxisProps, compactNumber, dailyChartData,
   formatDate, hasValues, integer, useTrackedChartTooltip
 } from "./chartSupport"
 
@@ -43,7 +43,7 @@ function TokenComposition({ daily }: { readonly daily: DashboardResponse["daily"
               radius: series.name === "cacheWriteTokens" ? [3, 3, 0, 0] : 0,
               isAnimationActive: false
             })}
-            legendProps={{ verticalAlign: "bottom", height: 52 }}
+            legendProps={commonLegendProps}
             className="analytics-chart"
             role="img"
             aria-label="Stacked daily token composition chart"

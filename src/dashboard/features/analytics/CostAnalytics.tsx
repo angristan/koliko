@@ -4,7 +4,7 @@ import { CurrencyDollarIcon } from "@phosphor-icons/react"
 import type { DashboardResponse } from "../../../shared/api"
 import { ModelMix, RepositoryCostBars } from "./BreakdownCharts"
 import {
-  ChartEmpty, ChartPanel, commonXAxisProps, commonYAxisProps, dailyChartData, hasValues,
+  ChartEmpty, ChartPanel, commonLegendProps, commonXAxisProps, commonYAxisProps, compactMoney, dailyChartData, hasValues,
   summaryMoney, useTrackedChartTooltip
 } from "./chartSupport"
 
@@ -40,12 +40,12 @@ function CostTrend({ daily }: { readonly daily: DashboardResponse["daily"] }) {
             gridAxis="y"
             valueFormatter={(value) => summaryMoney.format(value)}
             xAxisProps={commonXAxisProps}
-            yAxisProps={{ ...commonYAxisProps, yAxisId: "left", tickFormatter: (value: number) => summaryMoney.format(value) }}
-            rightYAxisProps={{ width: 54, yAxisId: "right", tickFormatter: (value: number) => summaryMoney.format(value) }}
+            yAxisProps={{ ...commonYAxisProps, yAxisId: "left", tickFormatter: (value: number) => compactMoney.format(value) }}
+            rightYAxisProps={{ width: 54, yAxisId: "right", tickFormatter: (value: number) => compactMoney.format(value) }}
             tooltipProps={tooltipProps}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
             lineProps={{ isAnimationActive: false }}
-            legendProps={{ verticalAlign: "bottom", height: 34 }}
+            legendProps={commonLegendProps}
             className="analytics-chart"
             role="img"
             aria-label="Daily cost bars with cumulative cost line"

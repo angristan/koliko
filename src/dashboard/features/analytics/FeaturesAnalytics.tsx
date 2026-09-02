@@ -3,7 +3,7 @@ import { BarChart } from "@mantine/charts"
 import { SparkleIcon } from "@phosphor-icons/react"
 import type { DashboardResponse } from "../../../shared/api"
 import {
-  ChartEmpty, ChartPanel, commonXAxisProps, dailyChartData, hasValues, integer, useTrackedChartTooltip
+  ChartEmpty, ChartPanel, commonLegendProps, commonXAxisProps, dailyChartData, hasValues, integer, useTrackedChartTooltip
 } from "./chartSupport"
 
 function FeatureTrend({ daily }: { readonly daily: DashboardResponse["daily"] }) {
@@ -36,7 +36,7 @@ function FeatureTrend({ daily }: { readonly daily: DashboardResponse["daily"] })
             yAxisProps={{ width: 36, allowDecimals: false }}
             tooltipProps={tooltipProps}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
-            legendProps={{ verticalAlign: "bottom", height: 34 }}
+            legendProps={commonLegendProps}
             className="analytics-chart"
             role="img"
             aria-label="Daily feature lifecycle stacked bar chart"

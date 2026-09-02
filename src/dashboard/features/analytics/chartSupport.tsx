@@ -11,6 +11,12 @@ export const summaryMoney = new Intl.NumberFormat("en", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 })
+export const compactMoney = new Intl.NumberFormat("en", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 1
+})
 
 export const formatDate = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString("en", {
   month: "short",
@@ -102,6 +108,7 @@ export const dailyChartData = (daily: ReadonlyArray<DailyMetric>) => daily.map((
 
 export const commonXAxisProps = { minTickGap: 28, tickMargin: 10 }
 export const commonYAxisProps = { width: 48 }
+export const commonLegendProps = { verticalAlign: "bottom", itemSorter: null } as const
 const commonTooltipProps = { offset: 16, isAnimationActive: false }
 const unmeasuredTooltipHeight = 192
 

@@ -4,7 +4,7 @@ import { WrenchIcon } from "@phosphor-icons/react"
 import type { TooltipContentProps } from "recharts"
 import type { DashboardResponse } from "../../../shared/api"
 import {
-  ChartEmpty, ChartPanel, compactNumber, formatDuration, integer, useTrackedChartTooltip
+  ChartEmpty, ChartPanel, commonLegendProps, compactNumber, formatDuration, integer, useTrackedChartTooltip
 } from "./chartSupport"
 
 function ToolPerformanceTooltip({ active, label, payload }: TooltipContentProps<number, string>) {
@@ -74,7 +74,7 @@ function ToolPerformance({ tools }: { readonly tools: DashboardResponse["tools"]
             tooltipProps={{ ...tooltipProps, content: (props) => <ToolPerformanceTooltip {...props} /> }}
             barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
             lineProps={{ isAnimationActive: false }}
-            legendProps={{ verticalAlign: "bottom", height: 34 }}
+            legendProps={commonLegendProps}
             className="analytics-chart"
             role="img"
             aria-label="Tool call volume and error rate composite chart"

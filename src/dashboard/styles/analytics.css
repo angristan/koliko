@@ -58,10 +58,7 @@
   line-height: 1.25;
 }
 
-.analytics-chart :is(
-  .mantine-BarChart-legend,
-  .mantine-CompositeChart-legend
-) {
+.analytics-chart .mantine-ChartLegend-legend {
   flex-wrap: wrap;
   justify-content: center;
   row-gap: 4px;

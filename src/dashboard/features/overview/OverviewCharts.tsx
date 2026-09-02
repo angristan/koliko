@@ -6,7 +6,7 @@ import type { TrendMetric } from "../../navigation"
 import { hasCollectedData } from "../../presentation"
 import { ModelMix, RepositoryBars } from "../analytics/BreakdownCharts"
 import {
-  ChartEmpty, ChartPanel, CollectorSetup, commonXAxisProps, commonYAxisProps, compactNumber,
+  ChartEmpty, ChartPanel, CollectorSetup, commonXAxisProps, commonYAxisProps, compactMoney, compactNumber,
   dailyChartData, formatDuration, formatLongDate, hasValues, integer, summaryMoney, useTrackedChartTooltip
 } from "../analytics/chartSupport"
 
@@ -17,7 +17,8 @@ const trendMetrics = {
     key: "tokens",
     color: "var(--koliko-chart-teal)",
     type: "bar",
-    format: (value: number) => compactNumber.format(value)
+    format: (value: number) => compactNumber.format(value),
+    axisFormat: (value: number) => compactNumber.format(value)
   },
   cost: {
     label: "Cost",
@@ -25,7 +26,8 @@ const trendMetrics = {
     key: "cost",
     color: "var(--koliko-chart-orange)",
     type: "area",
-    format: (value: number) => summaryMoney.format(value)
+    format: (value: number) => summaryMoney.format(value),
+    axisFormat: (value: number) => compactMoney.format(value)
   },
   sessions: {
     label: "Sessions",
@@ -33,7 +35,8 @@ const trendMetrics = {
     key: "sessions",
     color: "var(--koliko-chart-sage)",
     type: "bar",
-    format: (value: number) => integer.format(value)
+    format: (value: number) => integer.format(value),
+    axisFormat: (value: number) => integer.format(value)
   },
   runtime: {
     label: "Agent time",
@@ -41,7 +44,8 @@ const trendMetrics = {
     key: "trackedMs",
     color: "var(--koliko-chart-cocoa)",
     type: "area",
-    format: formatDuration
+    format: formatDuration,
+    axisFormat: formatDuration
   }
 } as const
 
@@ -88,7 +92,7 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
               gridAxis="y"
               withDots={false}
               xAxisProps={commonXAxisProps}
-              yAxisProps={{ ...commonYAxisProps, tickFormatter: config.format }}
+              yAxisProps={{ ...commonYAxisProps, tickFormatter: config.axisFormat }}
               tooltipProps={tooltipProps}
               barProps={{ radius: [4, 4, 0, 0], isAnimationActive: false }}
               areaProps={{ fillOpacity: 0.16, isAnimationActive: false }}
