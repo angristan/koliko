@@ -407,8 +407,12 @@ describe("Worker runtime", () => {
       to: "2026-07-21",
       summary: {
         sessions: 1,
+        parentSessions: 1,
+        subagentSessions: 0,
         turns: 1,
         trackedMs: 120_000,
+        parentTrackedMs: 120_000,
+        subagentTrackedMs: 0,
         inputTokens: 100,
         outputTokens: 40,
         cacheReadTokens: 30,
@@ -424,8 +428,12 @@ describe("Worker runtime", () => {
       daily: [{
         date: "2026-07-21",
         sessions: 1,
+        parentSessions: 1,
+        subagentSessions: 0,
         turns: 1,
         trackedMs: 120_000,
+        parentTrackedMs: 120_000,
+        subagentTrackedMs: 0,
         inputTokens: 100,
         outputTokens: 40,
         cacheReadTokens: 30,
@@ -453,6 +461,8 @@ describe("Worker runtime", () => {
       sessions: [{
         id: "session_charts",
         repository: "koliko",
+        runtimeRole: "parent",
+        parentSessionId: null,
         startedAt: "2026-07-21T12:00:00.000Z",
         endedAt: "2026-07-21T12:00:00.000Z",
         model: "provider/model",
@@ -462,6 +472,156 @@ describe("Worker runtime", () => {
         trackedMs: 120_000
       }]
     })
+  })
+
+  it("separates linked subagent sessions while preserving total usage", async () => {
+    await insertApiKey()
+    const common = {
+      schemaVersion: 1,
+      occurredAt: "2026-07-21T12:00:00.000Z",
+      repository: "koliko"
+    }
+    const events = [
+      {
+        ...common,
+        id: "parent_start",
+        sessionId: "session_parent",
+        runtimeId: "runtime_parent",
+        sequence: 1,
+        type: "runtime_started",
+        attributes: { reason: "startup", mode: "tui", runtimeRole: "parent" }
+      },
+      {
+        ...common,
+        id: "parent_run",
+        sessionId: "session_parent",
+        runtimeId: "runtime_parent",
+        sequence: 2,
+        type: "agent_run",
+        durationMs: 100_000
+      },
+      {
+        ...common,
+        id: "spawn_two",
+        sessionId: "session_parent",
+        runtimeId: "runtime_parent",
+        sequence: 3,
+        type: "subagent",
+        attributes: { action: "parallel", count: 2 }
+      },
+      {
+        ...common,
+        id: "wait_for_children",
+        sessionId: "session_parent",
+        runtimeId: "runtime_parent",
+        sequence: 4,
+        type: "subagent",
+        attributes: { action: "wait", count: 2 }
+      },
+      {
+        ...common,
+        id: "failed_spawn",
+        sessionId: "session_parent",
+        runtimeId: "runtime_parent",
+        sequence: 5,
+        type: "subagent",
+        status: "error",
+        attributes: { action: "spawn", count: 1 }
+      },
+      {
+        ...common,
+        id: "child_start",
+        sessionId: "session_child",
+        runtimeId: "runtime_child",
+        sequence: 1,
+        type: "runtime_started",
+        attributes: {
+          reason: "startup",
+          mode: "tui",
+          runtimeRole: "subagent",
+          parentSessionId: "session_parent",
+          subagentId: "agent-1"
+        }
+      },
+      {
+        ...common,
+        id: "child_run",
+        sessionId: "session_child",
+        runtimeId: "runtime_child",
+        sequence: 2,
+        type: "agent_run",
+        durationMs: 200_000
+      },
+      {
+        ...common,
+        id: "child_usage",
+        sessionId: "session_child",
+        runtimeId: "runtime_child",
+        sequence: 3,
+        type: "usage",
+        provider: "provider",
+        model: "child-model",
+        inputTokens: 70,
+        outputTokens: 30,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 100,
+        costTotal: 0.2,
+        attributes: { source: "assistant" }
+      }
+    ]
+
+    const ingestResponse = await fetchWorker(new Request("https://example.test/api/v1/events", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer klk_test_key",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ clientName: "koliko-pi-extension", clientVersion: "0.1.0", events })
+    }))
+    expect(ingestResponse.status).toBe(202)
+
+    const response = await fetchWorker(new Request(
+      "https://example.test/api/dashboard?from=2026-07-21&to=2026-07-21",
+      { headers: { cookie: await sessionCookie() } }
+    ))
+    expect(response.status).toBe(200)
+    const result = await response.json() as {
+      summary: Record<string, number>
+      daily: Array<Record<string, number>>
+      sessions: Array<{ id: string; runtimeRole: string; parentSessionId: string | null }>
+      features: Array<{ feature: string; label: string; count: number }>
+    }
+
+    expect(result.summary).toMatchObject({
+      sessions: 2,
+      parentSessions: 1,
+      subagentSessions: 1,
+      trackedMs: 300_000,
+      parentTrackedMs: 100_000,
+      subagentTrackedMs: 200_000,
+      totalTokens: 100,
+      cost: 0.2,
+      subagents: 2
+    })
+    expect(result.daily[0]).toMatchObject({
+      sessions: 2,
+      parentSessions: 1,
+      subagentSessions: 1,
+      trackedMs: 300_000,
+      parentTrackedMs: 100_000,
+      subagentTrackedMs: 200_000,
+      tokens: 100,
+      subagents: 2
+    })
+    expect(result.sessions.find((session) => session.id === "session_child")).toMatchObject({
+      runtimeRole: "subagent",
+      parentSessionId: "session_parent"
+    })
+    expect(result.features.filter((feature) => feature.feature === "subagent")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "parallel", count: 1 }),
+      expect.objectContaining({ label: "wait", count: 1 })
+    ]))
   })
 
   it("counts a cross-day session once across a dashboard range", async () => {

@@ -20,7 +20,7 @@ Koliko shows where agent time and tokens go without collecting the work itself. 
 
 | Collected | Never collected |
 | --- | --- |
-| Session and runtime identifiers | Prompts or responses |
+| Session, runtime, and parent/sub-agent linkage identifiers | Prompts or responses |
 | Repository folder name | Source code or file contents |
 | Provider, model, and thinking level | Reasoning content |
 | Token counts and provider-reported cost | Tool arguments, output, or command text |

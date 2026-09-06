@@ -13,10 +13,16 @@ export class RegistrationVerifyPayload extends Schema.Class<RegistrationVerifyPa
   credential: RegistrationCredentialPayload
 }) {}
 
+export const RuntimeRole = Schema.Literals(["parent", "subagent"])
+
 export class SummaryMetrics extends Schema.Class<SummaryMetrics>("SummaryMetrics")({
   sessions: Schema.Number,
+  parentSessions: Schema.Number,
+  subagentSessions: Schema.Number,
   turns: Schema.Number,
   trackedMs: Schema.Number,
+  parentTrackedMs: Schema.Number,
+  subagentTrackedMs: Schema.Number,
   inputTokens: Schema.Number,
   outputTokens: Schema.Number,
   cacheReadTokens: Schema.Number,
@@ -33,8 +39,12 @@ export class SummaryMetrics extends Schema.Class<SummaryMetrics>("SummaryMetrics
 export class DailyMetric extends Schema.Class<DailyMetric>("DailyMetric")({
   date: Schema.String,
   sessions: Schema.Number,
+  parentSessions: Schema.Number,
+  subagentSessions: Schema.Number,
   turns: Schema.Number,
   trackedMs: Schema.Number,
+  parentTrackedMs: Schema.Number,
+  subagentTrackedMs: Schema.Number,
   inputTokens: Schema.Number,
   outputTokens: Schema.Number,
   cacheReadTokens: Schema.Number,
@@ -74,6 +84,8 @@ export class FeatureMetric extends Schema.Class<FeatureMetric>("FeatureMetric")(
 export class SessionMetric extends Schema.Class<SessionMetric>("SessionMetric")({
   id: Schema.String,
   repository: Schema.String,
+  runtimeRole: RuntimeRole,
+  parentSessionId: Schema.NullOr(Schema.String),
   startedAt: Schema.String,
   endedAt: Schema.String,
   model: Schema.String,

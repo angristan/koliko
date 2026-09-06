@@ -31,7 +31,7 @@ const trendMetrics = {
   },
   sessions: {
     label: "Sessions",
-    detail: "Distinct daily runs",
+    detail: "Distinct parent and subagent runs",
     key: "sessions",
     color: "var(--koliko-chart-sage)",
     type: "bar",
@@ -40,7 +40,7 @@ const trendMetrics = {
   },
   runtime: {
     label: "Agent time",
-    detail: "Tracked active runtime",
+    detail: "Aggregate active runtime; parallel work overlaps",
     key: "trackedMs",
     color: "var(--koliko-chart-cocoa)",
     type: "area",
@@ -55,8 +55,22 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
   readonly onMetricChange: (metric: TrendMetric) => void
 }) {
   const config = trendMetrics[metric]
-  const data = dailyChartData(daily).map((day) => ({ date: day.date, label: day.label, value: day[config.key] }))
+  const splitMetric = metric === "sessions" || metric === "runtime"
+  const data = dailyChartData(daily).map((day) => ({
+    date: day.date,
+    label: day.label,
+    value: day[config.key],
+    parent: metric === "sessions" ? day.parentSessions : metric === "runtime" ? day.parentTrackedMs : 0,
+    subagent: metric === "sessions" ? day.subagentSessions : metric === "runtime" ? day.subagentTrackedMs : 0
+  }))
   const total = data.reduce((sum, day) => sum + day.value, 0)
+  const series = splitMetric
+    ? [
+        { name: "parent", label: "Parent", color: config.color, type: config.type },
+        { name: "subagent", label: "Subagent", color: "var(--koliko-chart-sky)", type: config.type }
+      ]
+    : [{ name: "value", label: config.label, color: config.color, type: config.type }]
+  const valueKeys = splitMetric ? ["parent", "subagent"] : ["value"]
   const { trackingProps, tooltipProps } = useTrackedChartTooltip()
 
   return (
@@ -74,7 +88,7 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
         />
       }
     >
-      {!hasValues(data, ["value"]) ? (
+      {!hasValues(data, valueKeys) ? (
         <ChartEmpty icon={<ChartLineUpIcon />} title="No trend data" detail="Usage trends will appear after your collector sends events." />
       ) : (
         <>
@@ -83,7 +97,7 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
               h={270}
               data={data}
               dataKey="label"
-              series={[{ name: "value", label: config.label, color: config.color, type: config.type }]}
+              series={series}
               valueFormatter={config.format}
               maxBarWidth={18}
               strokeWidth={2}
@@ -91,6 +105,7 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
               tickLine="none"
               gridAxis="y"
               withDots={false}
+              withLegend={splitMetric}
               xAxisProps={commonXAxisProps}
               yAxisProps={{ ...commonYAxisProps, tickFormatter: config.axisFormat }}
               tooltipProps={tooltipProps}
@@ -107,12 +122,19 @@ function TrendExplorer({ daily, metric, onMetricChange }: {
             <ScrollArea type="auto" scrollbars="x" offsetScrollbars="x">
               <Table verticalSpacing="xs" horizontalSpacing="md">
                 <Table.Thead>
-                  <Table.Tr><Table.Th>Date</Table.Th><Table.Th ta="right">{config.label}</Table.Th></Table.Tr>
+                  <Table.Tr>
+                    <Table.Th>Date</Table.Th>
+                    {splitMetric && <Table.Th ta="right">Parent</Table.Th>}
+                    {splitMetric && <Table.Th ta="right">Subagent</Table.Th>}
+                    <Table.Th ta="right">Total</Table.Th>
+                  </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {data.map((day) => (
                     <Table.Tr key={day.date}>
                       <Table.Td>{formatLongDate(day.date)}</Table.Td>
+                      {splitMetric && <Table.Td ta="right" className="tabular-value">{config.format(day.parent)}</Table.Td>}
+                      {splitMetric && <Table.Td ta="right" className="tabular-value">{config.format(day.subagent)}</Table.Td>}
                       <Table.Td ta="right" className="tabular-value">{config.format(day.value)}</Table.Td>
                     </Table.Tr>
                   ))}

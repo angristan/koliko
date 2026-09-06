@@ -28,6 +28,9 @@ import { createDeliveryStatusFeedback } from "./delivery-status"
 import { TelemetryQueue } from "./queue"
 
 const FLUSH_INTERVAL_MS = 15_000
+const SUBAGENT_CHILD_ENV = "PI_SUBAGENT_CHILD"
+const SUBAGENT_ID_ENV = "PI_SUBAGENT_PARENT_ID"
+const PARENT_SESSION_ENV = "PI_SUBAGENT_PARENT_SESSION_ID"
 
 const UsagePayload = Schema.Struct({
   input: Schema.Number,
@@ -85,6 +88,22 @@ const usageProperty = async (value: unknown): Promise<UsageShape | undefined> =>
 const unknownProperty = (value: unknown, key: string): unknown =>
   isRecord(value) ? value[key] : undefined
 
+const boundedIdentifier = (value: string | undefined): string | undefined => {
+  const identifier = value?.trim()
+  return identifier && identifier.length <= 128 ? identifier : undefined
+}
+
+const runtimeLineage = (environment: Readonly<Record<string, string | undefined>>): Readonly<Record<string, string>> => {
+  if (environment[SUBAGENT_CHILD_ENV] !== "1") return { runtimeRole: "parent" }
+  const subagentId = boundedIdentifier(environment[SUBAGENT_ID_ENV])
+  const parentSessionId = boundedIdentifier(environment[PARENT_SESSION_ENV])
+  return {
+    runtimeRole: "subagent",
+    ...(subagentId ? { subagentId } : {}),
+    ...(parentSessionId ? { parentSessionId } : {})
+  }
+}
+
 const flushWithin = Effect.fn("PiCollector.flushWithin")(function*(
   flush: (signal: AbortSignal) => Promise<number>,
   milliseconds: number
@@ -120,8 +139,10 @@ export class KolikoRuntime {
   private thinkingLevel: ThinkingLevelValue = "off"
   private readonly toolExecutions = new Map<string, { readonly startedAt: number; readonly args: unknown }>()
   private readonly deliveryMonitor: DeliveryMonitor
+  private readonly lineage: Readonly<Record<string, string>>
 
-  constructor(private readonly pi: ExtensionAPI) {
+  constructor(private readonly pi: ExtensionAPI, environment: Readonly<Record<string, string | undefined>> = process.env) {
+    this.lineage = runtimeLineage(environment)
     this.deliveryMonitor = new DeliveryMonitor(createDeliveryStatusFeedback(
       () => this.activeContext?.hasUI ? this.activeContext.ui : undefined
     ))
@@ -217,7 +238,7 @@ export class KolikoRuntime {
       ...(this.provider !== undefined ? { provider: this.provider } : {}),
       ...(this.model !== undefined ? { model: this.model } : {}),
       thinkingLevel: this.thinkingLevel,
-      attributes: { reason: event.reason, mode: ctx.mode }
+      attributes: { reason: event.reason, mode: ctx.mode, ...this.lineage }
     })
 
     if (this.timer) clearInterval(this.timer)

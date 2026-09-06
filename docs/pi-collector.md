@@ -89,7 +89,7 @@ When `PI_CODING_AGENT_DIR` is set, the `koliko` directory is created beneath tha
 
 | Pi event | Koliko event | Metadata |
 | --- | --- | --- |
-| `session_start` | `runtime_started` | Repository folder, provider, model, thinking level, reason, mode |
+| `session_start` | `runtime_started` | Repository folder, provider, model, thinking level, reason, mode, parent/subagent role, and available parent linkage |
 | `agent_start` + `agent_settled` | `agent_run` | Active duration, provider, model, thinking level; UI prompt wait time is excluded |
 | Assistant `message_end` | `usage` | Token counters, cost, provider, model, source |
 | Tool-result `message_end` with usage | `usage` | Token counters, cost, source |
@@ -99,12 +99,16 @@ When `PI_CODING_AGENT_DIR` is set, the `koliko` directory is created beneath tha
 | Branch summary in `session_tree` | `usage` | Branch-summary usage when exposed by Pi |
 | `tool_execution_start` + `tool_execution_end` | `tool_execution` | Tool name, duration, success/error |
 | Completed `goal_*` tool | `goal` | Lifecycle action and status |
-| Completed `agents` or `subagent` tool | `subagent` | Lifecycle shape, count, duration, status |
+| Completed `agents` or `subagent` tool | `subagent` | Lifecycle action, affected-agent count, duration, status |
 | `session_shutdown` | `runtime_ended` | Runtime duration and shutdown reason |
 
 Pi 0.84.4 or newer exposes blocking extension UI spans through `ui_prompt_start` and `ui_prompt_end`. The collector subtracts those spans from `agent_run.durationMs` and records the wall-clock span plus excluded wait time as `elapsedMs` and `uiPromptWaitMs` attributes. It never records the UI prompt title or response.
 
 On older Pi versions, these events are unavailable, so `agent_run.durationMs` includes time waiting for extension UI prompts.
+
+The dashboard keeps token and provider-reported cost totals across parent and subagent sessions. It labels their session counts and active time separately; aggregate active time can overlap when agents run concurrently. The spawned-agent metric counts only successful spawn-style actions and uses their affected-agent count. Other lifecycle actions remain available in the feature breakdown.
+
+Existing events collected before runtime roles were introduced are classified as parent sessions because their origin cannot be reconstructed safely.
 
 See [Privacy](privacy.md) for fields deliberately omitted from these mappings.
 

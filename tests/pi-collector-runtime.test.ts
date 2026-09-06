@@ -68,6 +68,28 @@ describe("Koliko Pi collector runtime", () => {
     vi.useRealTimers()
   })
 
+  it("classifies parent and linked subagent runtimes", async () => {
+    const parent = new KolikoRuntime(pi, {})
+    await parent.sessionStart({ type: "session_start", reason: "startup" }, context)
+
+    const child = new KolikoRuntime(pi, {
+      PI_SUBAGENT_CHILD: "1",
+      PI_SUBAGENT_PARENT_ID: "agent-1",
+      PI_SUBAGENT_PARENT_SESSION_ID: "parent-session-1"
+    })
+    await child.sessionStart({ type: "session_start", reason: "startup" }, context)
+
+    const starts = capturedEvents.filter((candidate) => candidate.type === "runtime_started")
+    expect(starts[0]).toMatchObject({ attributes: { runtimeRole: "parent" } })
+    expect(starts[1]).toMatchObject({
+      attributes: {
+        runtimeRole: "subagent",
+        subagentId: "agent-1",
+        parentSessionId: "parent-session-1"
+      }
+    })
+  })
+
   it("excludes UI prompt waits from active agent time without collecting prompt content", async () => {
     const runtime = new KolikoRuntime(pi)
     await runtime.sessionStart({ type: "session_start", reason: "startup" }, context)

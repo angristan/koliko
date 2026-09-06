@@ -81,34 +81,51 @@ const rangeFromRequest = (request: Request): Effect.Effect<DateRange, HttpFailur
 })
 
 const SUMMARY_SQL = `
+  WITH session_totals AS (
+    SELECT
+      COUNT(DISTINCT sessions.session_id) AS sessions,
+      COUNT(DISTINCT CASE WHEN COALESCE(context.runtime_role, 'parent') = 'parent' THEN sessions.session_id END) AS parentSessions,
+      COUNT(DISTINCT CASE WHEN context.runtime_role = 'subagent' THEN sessions.session_id END) AS subagentSessions,
+      COALESCE(SUM(CASE WHEN COALESCE(context.runtime_role, 'parent') = 'parent' THEN sessions.tracked_ms ELSE 0 END), 0) AS parentTrackedMs,
+      COALESCE(SUM(CASE WHEN context.runtime_role = 'subagent' THEN sessions.tracked_ms ELSE 0 END), 0) AS subagentTrackedMs
+    FROM telemetry_daily_session_metrics AS sessions
+    LEFT JOIN telemetry_session_context AS context ON context.session_id = sessions.session_id
+    WHERE sessions.day >= ? AND sessions.day <= ?
+  )
   SELECT
-    (
-      SELECT COUNT(DISTINCT session_id)
-      FROM telemetry_daily_session_metrics
-      WHERE day >= ? AND day <= ?
-    ) AS sessions,
-    COALESCE(SUM(turns), 0) AS turns,
-    COALESCE(SUM(tracked_ms), 0) AS trackedMs,
-    COALESCE(SUM(input_tokens), 0) AS inputTokens,
-    COALESCE(SUM(output_tokens), 0) AS outputTokens,
-    COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
-    COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
-    COALESCE(SUM(total_tokens), 0) AS totalTokens,
-    COALESCE(SUM(cost), 0) AS cost,
-    COALESCE(SUM(tool_calls), 0) AS toolCalls,
-    COALESCE(SUM(tool_errors), 0) AS toolErrors,
-    COALESCE(SUM(compactions), 0) AS compactions,
-    COALESCE(SUM(goals), 0) AS goals,
-    COALESCE(SUM(subagents), 0) AS subagents
-  FROM telemetry_daily_metrics
-  WHERE day >= ? AND day <= ?`
+    session_totals.sessions,
+    session_totals.parentSessions,
+    session_totals.subagentSessions,
+    COALESCE(SUM(metrics.turns), 0) AS turns,
+    COALESCE(SUM(metrics.tracked_ms), 0) AS trackedMs,
+    session_totals.parentTrackedMs,
+    session_totals.subagentTrackedMs,
+    COALESCE(SUM(metrics.input_tokens), 0) AS inputTokens,
+    COALESCE(SUM(metrics.output_tokens), 0) AS outputTokens,
+    COALESCE(SUM(metrics.cache_read_tokens), 0) AS cacheReadTokens,
+    COALESCE(SUM(metrics.cache_write_tokens), 0) AS cacheWriteTokens,
+    COALESCE(SUM(metrics.total_tokens), 0) AS totalTokens,
+    COALESCE(SUM(metrics.cost), 0) AS cost,
+    COALESCE(SUM(metrics.tool_calls), 0) AS toolCalls,
+    COALESCE(SUM(metrics.tool_errors), 0) AS toolErrors,
+    COALESCE(SUM(metrics.compactions), 0) AS compactions,
+    COALESCE(SUM(metrics.goals), 0) AS goals,
+    COALESCE(SUM(spawns.count), 0) AS subagents
+  FROM telemetry_daily_metrics AS metrics
+  CROSS JOIN session_totals
+  LEFT JOIN telemetry_daily_subagent_spawns AS spawns ON spawns.day = metrics.day
+  WHERE metrics.day >= ? AND metrics.day <= ?`
 
 const DAILY_SQL = `
   SELECT
     metrics.day AS date,
     COALESCE(sessions.count, 0) AS sessions,
+    COALESCE(sessions.parent_count, 0) AS parentSessions,
+    COALESCE(sessions.subagent_count, 0) AS subagentSessions,
     metrics.turns,
     metrics.tracked_ms AS trackedMs,
+    COALESCE(sessions.parent_tracked_ms, 0) AS parentTrackedMs,
+    COALESCE(sessions.subagent_tracked_ms, 0) AS subagentTrackedMs,
     metrics.input_tokens AS inputTokens,
     metrics.output_tokens AS outputTokens,
     metrics.cache_read_tokens AS cacheReadTokens,
@@ -119,14 +136,22 @@ const DAILY_SQL = `
     metrics.tool_errors AS toolErrors,
     metrics.compactions,
     metrics.goals,
-    metrics.subagents
+    COALESCE(spawns.count, 0) AS subagents
   FROM telemetry_daily_metrics AS metrics
   LEFT JOIN (
-    SELECT day, COUNT(*) AS count
-    FROM telemetry_daily_session_metrics
-    WHERE day >= ? AND day <= ?
-    GROUP BY day
+    SELECT
+      sessions.day,
+      COUNT(*) AS count,
+      SUM(CASE WHEN COALESCE(context.runtime_role, 'parent') = 'parent' THEN 1 ELSE 0 END) AS parent_count,
+      SUM(CASE WHEN context.runtime_role = 'subagent' THEN 1 ELSE 0 END) AS subagent_count,
+      SUM(CASE WHEN COALESCE(context.runtime_role, 'parent') = 'parent' THEN sessions.tracked_ms ELSE 0 END) AS parent_tracked_ms,
+      SUM(CASE WHEN context.runtime_role = 'subagent' THEN sessions.tracked_ms ELSE 0 END) AS subagent_tracked_ms
+    FROM telemetry_daily_session_metrics AS sessions
+    LEFT JOIN telemetry_session_context AS context ON context.session_id = sessions.session_id
+    WHERE sessions.day >= ? AND sessions.day <= ?
+    GROUP BY sessions.day
   ) AS sessions ON sessions.day = metrics.day
+  LEFT JOIN telemetry_daily_subagent_spawns AS spawns ON spawns.day = metrics.day
   WHERE metrics.day >= ? AND metrics.day <= ?
   ORDER BY metrics.day`
 
@@ -184,6 +209,8 @@ const SESSIONS_SQL = `
   SELECT
     sessions.session_id AS id,
     MIN(sessions.repository) AS repository,
+    COALESCE(MAX(context.runtime_role), 'parent') AS runtimeRole,
+    MAX(context.parent_session_id) AS parentSessionId,
     MIN(sessions.started_at) AS startedAt,
     MAX(sessions.ended_at) AS endedAt,
     COALESCE(MAX(models.model), 'unknown') AS model,
@@ -193,6 +220,7 @@ const SESSIONS_SQL = `
     COALESCE(SUM(sessions.tracked_ms), 0) AS trackedMs
   FROM telemetry_daily_session_metrics AS sessions
   LEFT JOIN telemetry_session_models AS models ON models.session_id = sessions.session_id
+  LEFT JOIN telemetry_session_context AS context ON context.session_id = sessions.session_id
   WHERE sessions.day >= ? AND sessions.day <= ?
   GROUP BY sessions.session_id
   ORDER BY endedAt DESC
@@ -242,8 +270,12 @@ export const dashboard = Effect.fn("Analytics.dashboard")(function*(request: Req
 
   const summary = summaryRows[0] ?? SummaryMetrics.make({
     sessions: 0,
+    parentSessions: 0,
+    subagentSessions: 0,
     turns: 0,
     trackedMs: 0,
+    parentTrackedMs: 0,
+    subagentTrackedMs: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,

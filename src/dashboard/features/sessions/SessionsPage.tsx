@@ -1,4 +1,4 @@
-import { Box, Button, Code, Group, Table, Text, ThemeIcon } from "@mantine/core"
+import { Badge, Box, Button, Code, Group, Table, Text, ThemeIcon } from "@mantine/core"
 import { ArrowRightIcon, ListBulletsIcon, TerminalWindowIcon } from "@phosphor-icons/react"
 import type { DashboardResponse } from "../../../shared/api"
 import { EmptyState, Panel } from "../../components/DashboardPrimitives"
@@ -33,6 +33,16 @@ export function SessionsPage({ dashboard, setSessionId }: {
                     <Group gap="sm" wrap="nowrap">
                       <ThemeIcon size="sm" variant="light" color="sky" radius="sm"><TerminalWindowIcon /></ThemeIcon>
                       <Text size="sm" fw={600}>{row.repository}</Text>
+                      {row.runtimeRole === "subagent" && (
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color="honey"
+                          title={row.parentSessionId ? `Parent session ${row.parentSessionId}` : "Parent session unavailable"}
+                        >
+                          Subagent
+                        </Badge>
+                      )}
                     </Group>
                   </Table.Td>
                   <Table.Td><Text size="sm" c="dimmed">{new Date(row.endedAt).toLocaleString()}</Text></Table.Td>

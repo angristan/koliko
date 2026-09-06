@@ -19,7 +19,7 @@ export function AnalyticsPage({ dashboard, section, onSectionChange }: {
       { group: "Event activity", label: "Tool calls", value: integer.format(summary?.toolCalls ?? 0), detail: summary?.toolCalls ? `${toolSuccess.value} successful` : "No calls", progress: toolSuccess.progress, color: "sage" },
       { group: "Event activity", label: "Compactions", value: integer.format(summary?.compactions ?? 0), detail: "context checkpoints", color: "sky" },
       { group: "Event activity", label: "Goal events", value: integer.format(summary?.goals ?? 0), detail: "lifecycle updates", color: "honey" },
-      { group: "Event activity", label: "Sub-agent events", value: integer.format(summary?.subagents ?? 0), detail: "delegated work", color: "sky" }
+      { group: "Event activity", label: "Spawned agents", value: integer.format(summary?.subagents ?? 0), detail: "successful delegated sessions", color: "sky" }
     ]} />
   )
 

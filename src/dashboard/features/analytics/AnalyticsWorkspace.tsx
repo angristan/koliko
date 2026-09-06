@@ -16,8 +16,12 @@ const EMPTY_DASHBOARD = DashboardResponse.make({
   to: "",
   summary: SummaryMetrics.make({
     sessions: 0,
+    parentSessions: 0,
+    subagentSessions: 0,
     turns: 0,
     trackedMs: 0,
+    parentTrackedMs: 0,
+    subagentTrackedMs: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,

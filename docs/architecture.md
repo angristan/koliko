@@ -58,7 +58,7 @@ D1 contains four source tables:
 | `api_keys` | Key names, visible prefixes, SHA-256 hashes, revocation state, and usage timestamps |
 | `telemetry_events` | Schema-versioned event metadata and analytics source of truth |
 
-Insert and delete triggers maintain derived daily, dimension, tool, feature, and session rollup tables. Dashboard queries read these bounded rollups instead of repeatedly scanning raw events. `telemetry_events.event_id` idempotency ensures a retried event cannot increment a rollup twice.
+Insert and delete triggers maintain derived daily, dimension, tool, feature, session, runtime-lineage, and spawned-agent rollup tables. Dashboard queries read these bounded rollups instead of repeatedly scanning raw events. `telemetry_events.event_id` idempotency ensures a retried event cannot increment a rollup twice.
 
 The raw ingestion key and the WebAuthn private key are never stored in D1.
 
@@ -120,11 +120,12 @@ See [Privacy](privacy.md) for the content boundary and [Pi collector](pi-collect
 
 ## Dashboard metrics
 
-- **Agent time**: time between `agent_start` and `agent_settled`; idle time between prompts is excluded.
+- **Agent time**: aggregate time between `agent_start` and `agent_settled`; idle time between prompts is excluded, while concurrently running parent and sub-agent spans overlap. Parent and sub-agent totals are also shown separately.
 - **Cache read rate**: cache-read tokens divided by input plus cache-read tokens.
 - **Cost**: the provider-reported total exposed by Pi for assistant, nested tool-model, compaction, and branch-summary usage when available.
 - **Tool success**: completed tool calls without an error divided by all completed tool calls.
-- **Sessions**: distinct Pi session IDs active in the selected date range.
+- **Sessions**: distinct Pi session IDs active in the selected date range, split into parent and sub-agent sessions when lineage metadata is available.
+- **Spawned agents**: the affected-agent count from successful spawn-style `agents` or `subagent` actions; wait, read, follow-up, interrupt, and close actions are excluded.
 
 ## Failure behavior
 

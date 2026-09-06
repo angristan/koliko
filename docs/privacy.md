@@ -9,6 +9,7 @@ This document describes the schema enforced by the Pi collector and the Worker. 
 ### Identity and timing
 
 - Random event, session, and runtime identifiers
+- Parent or sub-agent runtime role and, for compatible sub-agent runtimes, opaque parent-session and sub-agent identifiers
 - Per-runtime sequence number
 - Event occurrence and receipt timestamps
 - Active agent duration, elapsed agent span, and extension UI wait duration

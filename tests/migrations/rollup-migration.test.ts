@@ -12,7 +12,7 @@ import { signValue } from "../../src/worker/crypto"
 declare const TEST_D1_MIGRATIONS: D1Migration[]
 
 const legacyMigrations = TEST_D1_MIGRATIONS.filter(
-  (migration) => migration.name !== "0004_analytics_rollups.sql"
+  (migration) => !["0004_analytics_rollups.sql", "0005_subagent_lineage.sql"].includes(migration.name)
 )
 
 const sessionCookie = async (): Promise<string> => {
@@ -77,10 +77,32 @@ it("backfills rollups for telemetry stored before the migration", async () => {
     insertEvent([
       "latest_model", "session_1", 8, "2026-07-23T00:00:00.000Z", "model_selected",
       "provider", "latest", null, null, null, null, null, null, "{}"
+    ]),
+    insertEvent([
+      "subagent_spawn", "session_1", 9, "2026-07-21T12:05:00.000Z", "subagent",
+      null, null, null, null, null, null, "agents", "success", '{"action":"parallel","count":3}'
+    ]),
+    insertEvent([
+      "subagent_wait", "session_1", 10, "2026-07-21T12:06:00.000Z", "subagent",
+      null, null, null, null, null, null, "agents", "success", '{"action":"wait","count":3}'
+    ]),
+    insertEvent([
+      "failed_subagent_spawn", "session_1", 11, "2026-07-21T12:07:00.000Z", "subagent",
+      null, null, null, null, null, null, "agents", "error", '{"action":"spawn","count":1}'
+    ]),
+    insertEvent([
+      "child_runtime_start", "session_child", 1, "2026-07-20T12:00:00.000Z", "runtime_started",
+      null, null, null, null, null, null, null, "started", '{"runtimeRole":"subagent","parentSessionId":"session_1","subagentId":"agent_1"}'
     ])
   ])
 
   await applyD1Migrations(env.DB, TEST_D1_MIGRATIONS)
+
+  const childContext = await env.DB.prepare(
+    `SELECT runtime_role AS runtimeRole, parent_session_id AS parentSessionId, subagent_id AS subagentId
+     FROM telemetry_session_context WHERE session_id = 'session_child'`
+  ).first()
+  expect(childContext).toEqual({ runtimeRole: "subagent", parentSessionId: "session_1", subagentId: "agent_1" })
 
   const typedLabels = await env.DB.prepare(
     `SELECT typeof(label) AS type, detail_total AS detailTotal
@@ -113,7 +135,10 @@ it("backfills rollups for telemetry stored before the migration", async () => {
     sessions: 1,
     turns: 2,
     totalTokens: 30,
-    toolCalls: 2
+    toolCalls: 2,
+    parentSessions: 1,
+    subagentSessions: 0,
+    subagents: 3
   })
   expect(dashboard.summary.cost).toBeCloseTo(0.3)
   expect(dashboard.daily).toEqual([
@@ -148,7 +173,7 @@ it("backfills rollups for telemetry stored before the migration", async () => {
   ).first<string>("model")
   expect(previousModel).toBe("provider/model")
 
-  await env.DB.prepare("DELETE FROM telemetry_events WHERE session_id = 'session_1'").run()
+  await env.DB.prepare("DELETE FROM telemetry_events").run()
   const remainingRollupRows = await env.DB.prepare(
     `SELECT
       (SELECT COUNT(*) FROM telemetry_daily_metrics)
@@ -157,7 +182,9 @@ it("backfills rollups for telemetry stored before the migration", async () => {
       + (SELECT COUNT(*) FROM telemetry_daily_dimension_sessions)
       + (SELECT COUNT(*) FROM telemetry_daily_tools)
       + (SELECT COUNT(*) FROM telemetry_daily_features)
-      + (SELECT COUNT(*) FROM telemetry_session_models) AS count`
+      + (SELECT COUNT(*) FROM telemetry_session_models)
+      + (SELECT COUNT(*) FROM telemetry_session_context)
+      + (SELECT COUNT(*) FROM telemetry_daily_subagent_spawns) AS count`
   ).first<number>("count")
   expect(remainingRollupRows).toBe(0)
 })

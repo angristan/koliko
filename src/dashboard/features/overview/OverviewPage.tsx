@@ -21,8 +21,20 @@ export function OverviewPage({ dashboard, trendMetric, onTrendMetricChange }: {
   return (
     <Stack gap="sm">
       <InstrumentStrip metrics={[
-        { group: "Activity", label: "Sessions", value: integer.format(summary?.sessions ?? 0), detail: `${integer.format(summary?.turns ?? 0)} turns`, color: "sky" },
-        { group: "Activity", label: "Agent time", value: formatDuration(summary?.trackedMs ?? 0), detail: "active runtime", color: "sage" },
+        {
+          group: "Activity",
+          label: "Sessions",
+          value: integer.format(summary?.sessions ?? 0),
+          detail: `${integer.format(summary?.parentSessions ?? 0)} parent · ${integer.format(summary?.subagentSessions ?? 0)} subagent`,
+          color: "sky"
+        },
+        {
+          group: "Activity",
+          label: "Agent time",
+          value: formatDuration(summary?.trackedMs ?? 0),
+          detail: `${formatDuration(summary?.parentTrackedMs ?? 0)} parent · ${formatDuration(summary?.subagentTrackedMs ?? 0)} subagent`,
+          color: "sage"
+        },
         { group: "Activity", label: "Tokens", value: compactNumber.format(summary?.totalTokens ?? 0), detail: `${compactNumber.format(summary?.outputTokens ?? 0)} output`, color: "sky" },
         { group: "Activity", label: "Cost", value: money.format(summary?.cost ?? 0), detail: "provider reported", color: "honey" },
         { group: "Efficiency", label: "Cache read", value: formatPercent(cacheRate), detail: `${compactNumber.format(summary?.cacheReadTokens ?? 0)} tokens`, progress: cacheRate * 100, color: "sky" },
