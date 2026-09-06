@@ -15,6 +15,7 @@ export const compactMoney = new Intl.NumberFormat("en", {
   style: "currency",
   currency: "USD",
   notation: "compact",
+  minimumFractionDigits: 0,
   maximumFractionDigits: 1
 })
 
